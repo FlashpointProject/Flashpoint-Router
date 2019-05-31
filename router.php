@@ -148,7 +148,7 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 	// send these headers before the other script starts potentially echoing stuff
 	$file_headers = array(
 		$_SERVER['SERVER_PROTOCOL'] . ' 200 OK',
-		'Last-Modified: ' . date('r', router_get_http_date($filemtime))
+		'Last-Modified: ' . router_get_http_date($filemtime)
 	);
 	router_send_file_headers($file_headers);
 
