@@ -173,7 +173,7 @@ function router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slas
 	global $router_index_extensions;
 	global $router_extension_mimetypes;
 	
-	router_warn('Serving File From ROUTER_HTDOCS: ' . $pathname_htdocs);
+	router_warn('Serving File From HTDOCS: ' . $pathname_htdocs);
 	
 	if ($index_extension_htdocs >= count($router_index_extensions)) {
 		return false;
