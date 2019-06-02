@@ -498,7 +498,12 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 			// (one for the redirect and the other for OK)
 			$stream_meta_data = stream_get_meta_data($file_pointer_resource);
 			$file_headers = array();
+			// reset these so they aren't carried over from the previous base loop
+			$file_location = '';
 			$file_status_code = -1;
+			$file_content_length = -1;
+			$file_last_modified = false;
+			$file_contents_length = 0;
 
 			if (isset($stream_meta_data) === true && isset($stream_meta_data['wrapper_data']) === true) {
 				$wrapper_data = $stream_meta_data['wrapper_data'];
@@ -536,14 +541,16 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 								
 								if ($file_header_pathname_index_pos !== false) {
 									// $file_location will contain the redirect to forward
-									$file_location = $_SERVER['SCRIPT_NAME'];
+									$file_location = substr($file_header, $file_header_pathname_index_pos + strlen($pathname_index));
 									
-									if ($index_extension !== -1) {
-										// factor in index
-										$file_location .= $pathname_trailing_slash . 'index.' . $router_index_extensions[$index_extension];
+									if (empty($file_location) === false) {
+										if ($index_extension !== -1) {
+											// factor in index
+											$file_location = $pathname_trailing_slash . 'index.' . $router_index_extensions[$index_extension] . $file_location;
+										}
+										
+										$file_location = $_SERVER['SCRIPT_NAME'] . $file_location;
 									}
-									
-									$file_location .= substr($file_header, $file_header_pathname_index_pos + strlen($pathname_index));
 								}
 							}
 							
@@ -663,10 +670,10 @@ function router_route_pathname($pathname) {
 			for ($i = 0; $i < $router_index_extensions_count; $i++) {
 				$pathname_cgi_bin_index = $pathname_cgi_bin . '/index.' . $router_index_extensions[$i];
 				if (is_file($pathname_cgi_bin_index) === true) {
-					$pathname_cgi_bin = $pathname_cgi_bin_index;
+					//$pathname_cgi_bin = $pathname_cgi_bin_index;
 					$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
 					$index_extension_cgi_bin = $i;
-					return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_trailing_slash, $index_extension_cgi_bin);
+					return router_serve_file_from_cgi_bin($pathname_cgi_bin_index, $pathname_cgi_bin_info, $pathname_trailing_slash, $index_extension_cgi_bin);
 				}
 			}
 		}
@@ -698,9 +705,10 @@ function router_route_pathname($pathname) {
 			for ($i = 0; $i < $router_index_extensions_count; $i++) {
 				$pathname_htdocs_index = $pathname_htdocs . '/index.' . $router_index_extensions[$i];
 				if (is_file($pathname_htdocs_index) === true) {
-					$pathname_htdocs = $pathname_htdocs_index;
+					// let's pretend this never happened if we can't actually serve the file
+					//$pathname_htdocs = $pathname_htdocs_index;
 					$index_extension_htdocs = $i;
-					$filesize = router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_extension, $index_extension_htdocs);
+					$filesize = router_serve_file_from_htdocs($pathname_htdocs_index, $pathname_trailing_slash, $pathname_info_extension, $index_extension_htdocs);
 					
 					/*
 					if ($filesize === false) {
@@ -727,6 +735,8 @@ function router_route_pathname($pathname) {
 // start the program...
 if (router_route_pathname('/' . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) === false) {
 	//router_warn(ROUTER_TAB . 'Failed to Route Pathname');
-	return false;
+	// let's send this header explicitly
+	router_send_file_headers(array($_SERVER['SERVER_PROTOCOL'] . ' 404 Not Found'));
+	//return false;
 }
 ?>
