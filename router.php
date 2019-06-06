@@ -4,6 +4,7 @@
 
 // constants
 // all constants, globals, function names are prefixed with "router" to avoid any potential name collisions in included scripts
+const ROUTER_MAD4FP = false;
 const ROUTER_HTDOCS = 'htdocs';
 const ROUTER_CGI_BIN = 'cgi-bin';
 const ROUTER_MKDIR_MODE = 0755;
@@ -637,43 +638,46 @@ function router_route_pathname($pathname) {
 
 		$pathname = $_SERVER['SCRIPT_NAME'];
 	}
-
-	$pathname_cgi_bin = ROUTER_CGI_BIN . $pathname;
-	$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
-	$pathname_cgi_bin_index = '';
-	
-	// if the file being downloaded is a script, include it instead
-	$router_script_extensions_count = count($router_script_extensions);
-
-	for ($i = 0; $i < $router_script_extensions_count; $i++) {
-		if ($pathname_info_extension === $router_script_extensions[$i]) {
-			// never allow scripts to be served anywhere except from cgi-bin
-			// if the file doesn't exist - it's an error
-			if (is_file($pathname_cgi_bin) === false) {
-				return false;
-			}
-			
-			return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_trailing_slash);
-		}
-	}
-	
+		
 	$router_index_extensions_count = count($router_index_extensions);
 
-	// if the file exists in cgi-bin - even if it's empty - serve it from there
-	if (is_file($pathname_cgi_bin) === true) {
-		return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf, $pathname_trailing_slasho);
-	} else {
-		// also check directories for index files
-		if (is_dir($pathname_cgi_bin) === true) {
-			$index_extension_cgi_bin = -1;
+	// if this is not specifically MAD4FP, script files should never be downloaded
+	if (ROUTER_MAD4FP !== true) {
+		$pathname_cgi_bin = ROUTER_CGI_BIN . $pathname;
+		$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
+		$pathname_cgi_bin_index = '';
+		
+		// if the file being downloaded is a script, include it instead
+		$router_script_extensions_count = count($router_script_extensions);
 
-			for ($i = 0; $i < $router_index_extensions_count; $i++) {
-				$pathname_cgi_bin_index = $pathname_cgi_bin . '/index.' . $router_index_extensions[$i];
-				if (is_file($pathname_cgi_bin_index) === true) {
-					//$pathname_cgi_bin = $pathname_cgi_bin_index;
-					$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
-					$index_extension_cgi_bin = $i;
-					return router_serve_file_from_cgi_bin($pathname_cgi_bin_index, $pathname_cgi_bin_info, $pathname_trailing_slash, $index_extension_cgi_bin);
+		for ($i = 0; $i < $router_script_extensions_count; $i++) {
+			if ($pathname_info_extension === $router_script_extensions[$i]) {
+				// never allow scripts to be served anywhere except from cgi-bin
+				// if the file doesn't exist - it's an error
+				if (is_file($pathname_cgi_bin) === false) {
+					return false;
+				}
+				
+				return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_trailing_slash);
+			}
+		}
+
+		// if the file exists in cgi-bin - even if it's empty - serve it from there
+		if (is_file($pathname_cgi_bin) === true) {
+			return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf, $pathname_trailing_slasho);
+		} else {
+			// also check directories for index files
+			if (is_dir($pathname_cgi_bin) === true) {
+				$index_extension_cgi_bin = -1;
+
+				for ($i = 0; $i < $router_index_extensions_count; $i++) {
+					$pathname_cgi_bin_index = $pathname_cgi_bin . '/index.' . $router_index_extensions[$i];
+					if (is_file($pathname_cgi_bin_index) === true) {
+						//$pathname_cgi_bin = $pathname_cgi_bin_index;
+						$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
+						$index_extension_cgi_bin = $i;
+						return router_serve_file_from_cgi_bin($pathname_cgi_bin_index, $pathname_cgi_bin_info, $pathname_trailing_slash, $index_extension_cgi_bin);
+					}
 				}
 			}
 		}
@@ -730,6 +734,12 @@ function router_route_pathname($pathname) {
 		return false;
 	}
 	return true;
+}
+
+// if this is MAD4FP - the Base URL should be the "real internet"
+// the Launcher should not change this!!
+if (ROUTER_MAD4FP === true) {
+	$router_base_urls = array('MAD4FP' => 'http:/');
 }
 
 // start the program...
