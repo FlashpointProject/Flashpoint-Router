@@ -664,7 +664,7 @@ function router_route_pathname($pathname) {
 
 		// if the file exists in cgi-bin - even if it's empty - serve it from there
 		if (is_file($pathname_cgi_bin) === true) {
-			return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf, $pathname_trailing_slasho);
+			return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_trailing_slash);
 		} else {
 			// also check directories for index files
 			if (is_dir($pathname_cgi_bin) === true) {
