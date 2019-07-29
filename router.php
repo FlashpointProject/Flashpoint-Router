@@ -9,7 +9,7 @@ const ROUTER_HTDOCS = 'htdocs';
 const ROUTER_CGI_BIN = 'cgi-bin';
 const ROUTER_ALLOW_CROSSDOMAIN = true;
 const ROUTER_MKDIR_MODE = 0755;
-const ROUTER_FILE_HEADER_STATUS_PATTERN = '/http\s*\/\s*[0-9]+\s*.\s*[0-9]+\s+([0-9]+)/i';
+const ROUTER_FILE_HEADER_STATUS_PATTERN = '/http\s*\/\s*[0-9]+\s*\.\s*[0-9]+\s+([0-9]+)/i';
 const ROUTER_FILE_HEADER_PATTERN = '/(\S+)\s*:\s*(\S+)/i';
 const ROUTER_FILE_READ_LENGTH = 32768;
 const ROUTER_RETRY_SLEEP = 10000;
@@ -21,9 +21,9 @@ const ROUTER_NEWLINE = "\n";
 // TODO: make user able to set this in launcher options!
 $router_base_urls = array(
 	'Dri0m' => 'https://unstable.life/Flashpoint/Server/htdocs',
+	'BlueMaxima' => 'http://bluemaxima.org/htdocs',
 	// be sure to change this URL for every new version release!
-	'Archive.org' => 'http://archive.org/download/FP62Data/FP62Data.zip/htdocs',
-	'BlueMaxima' => 'http://bluemaxima.org/htdocs'
+	'Archive.org' => 'http://archive.org/download/FP62Data/FP62Data.zip/htdocs'
 );
 $router_index_extensions = array('htm', 'html');
 $router_script_extensions = array('php', 'php5', 'phtml');
