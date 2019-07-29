@@ -100,7 +100,7 @@ function router_compare_extensions($pathname_info_basename, $extensions) {
 	return false;
 }
 
-function router_get_mimetype($pathname_info_basename, $default_mimetype = 'application/x-octet-stream') {
+function router_get_mimetype($pathname_info_basename, $default_mimetype = 'application/octet-stream') {
 	global $router_extension_mimetypes;
 	
 	// first, get all the extensions as an array
@@ -144,12 +144,12 @@ function router_send_file_headers($file_headers) {
 			
 			if ($file_header_lower_match === 1) {
 				// this is a valid HTTP header
-				// disallow the application/x-octet-stream mimetype
+				// disallow the application/octet-stream mimetype
 				// also disallow closed connections because this causes a Redirector bug
 				// and Flash dislikes Content-Disposition
 				// we also disallow Date because PHP already is sending it (in the wrong format but w/e)
 				if (($file_header_lower_matches[1] !== 'connection' || $file_header_lower_matches[2] !== 'close') &&
-				($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/x-octet-stream') &&
+				($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream') &&
 				$file_header_lower_matches[1] !== 'content-disposition' &&
 				$file_header_lower_matches[1] !== 'date') {
 					//router_warn(ROUTER_TAB . 'Header Sent: ' . $file_headers[$i]);
