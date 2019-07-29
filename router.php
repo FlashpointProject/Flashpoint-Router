@@ -7,6 +7,7 @@
 const ROUTER_MAD4FP = false;
 const ROUTER_HTDOCS = 'htdocs';
 const ROUTER_CGI_BIN = 'cgi-bin';
+const ROUTER_ALLOW_CROSSDOMAIN = true;
 const ROUTER_MKDIR_MODE = 0755;
 const ROUTER_FILE_HEADER_STATUS_PATTERN = '/http\s*\/\s*[0-9]+\s*.\s*[0-9]+\s+([0-9]+)/i';
 const ROUTER_FILE_HEADER_PATTERN = '/(\S+)\s*:\s*(\S+)/i';
@@ -20,7 +21,8 @@ const ROUTER_NEWLINE = "\n";
 // TODO: make user able to set this in launcher options!
 $router_base_urls = array(
 	'Dri0m' => 'https://unstable.life/Flashpoint/Server/htdocs',
-	'Archive.org' => 'http://archive.org/download/FP61Data/FP61Data.zip/htdocs',
+	// be sure to change this URL for every new version release!
+	'Archive.org' => 'http://archive.org/download/FP62Data/FP62Data.zip/htdocs',
 	'BlueMaxima' => 'http://bluemaxima.org/htdocs'
 );
 $router_index_extensions = array('htm', 'html');
@@ -67,6 +69,54 @@ function router_get_http_date($timestamp = null) {
 	}
 	
 	return gmdate('D, d M Y H:i:s', $timestamp) . ' GMT';
+}
+
+// this will check if any extension in basename $pathname_info_basename
+// matches any extension in array $extensions, case-insensitively
+
+// more specifically, it will check the basename for any instance of
+// a) a period, followed by the extension, and then another period
+// b) a period, followed by the extension at the end of the basename
+// it will return true if an instance of the pattern is found
+// where the basename is $pathname_info_basename and the extension
+// is any extension in array $extensions
+
+// this is an intentional design - conventionally, extensions
+// may only be at the end of the basename. However, in Apache,
+// a file may have multiple extensions, each seperated by
+// a period, not including the text before the first period.
+// This is taken into consideration here
+function router_compare_extensions($pathname_info_basename, $extensions) {
+	// notice this adds a period to the end of the basename
+	$pathname_info_basename_lower_period = strtolower($pathname_info_basename) . '.';
+	$extensions_count = count($extensions);
+	
+	for ($i = 0; $i < $extensions_count; $i++) {
+		// since the basename has a period on the end, we don't need two conditions
+		if (strpos($pathname_info_basename_lower_period, '.' . strtolower($extensions[$i]) . '.') !== false) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function router_get_mimetype($pathname_info_basename, $default_mimetype = 'application/x-octet-stream') {
+	global $router_extension_mimetypes;
+	
+	// first, get all the extensions as an array
+	// we slice off the first element as it's not an extension
+	// if the file has no extension, this leaves us with an empty array
+	$pathname_info_basename_extensions = array_slice(explode($pathname_info_basename, '.'), 1);
+	
+	// we go from the last extension to first, since the last extension takes precedence
+	for ($i = count($pathname_info_basename_extensions) - 1; $i >= 0; $i--) {
+		foreach ($router_extension_mimetypes as $extension => $mimetype) {
+			if (strtolower($pathname_info_basename_extensions[$i]) === strtolower($extension)) {
+				return $mimetype;
+			}
+		}
+	}
+	return $default_mimetype;
 }
 
 // send the specified file headers
@@ -151,6 +201,11 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 		$_SERVER['SERVER_PROTOCOL'] . ' 200 OK',
 		'Last-Modified: ' . router_get_http_date($filemtime)
 	);
+	
+	if (ROUTER_ALLOW_CROSSDOMAIN === true) {
+		array_push($file_headers, 'Access-Control-Allow-Origin: *');
+	}
+	
 	router_send_file_headers($file_headers);
 
 	// include the script
@@ -170,9 +225,8 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 }
 
 // serve a local file from htdocs
-function router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_extension, $index_extension_htdocs = -1) {
+function router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename, $index_extension_htdocs = -1) {
 	global $router_index_extensions;
-	global $router_extension_mimetypes;
 	
 	router_warn('Serving File From HTDOCS: ' . $pathname_htdocs);
 	
@@ -206,23 +260,21 @@ function router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slas
 		return $filesize;
 	}
 	
+	// determine the mimetype of the local file based on its extension
+	$header_mimetype = router_get_mimetype($pathname_info_basename);
+	
 	// we have to make up all the headers to send since we're serving this from a local file
 	$file_headers = array(
 		$_SERVER['SERVER_PROTOCOL'] . ' 200 OK',
-		'Content-Length: ' . $filesize
+		'Content-Length: ' . $filesize,
+		'Content-Type: ' . $header_mimetype,
+		'Last-Modified: ' . router_get_http_date($filemtime)
 	);
-	// determine the mimetype of the local file based on its extension
-	$header_mimetype = 'application/x-octet-stream';
-
-	foreach($router_extension_mimetypes as $extension => $mimetype) {
-		if ($pathname_info_extension === $extension) {
-			$header_mimetype = $mimetype;
-			break;
-		}
+	
+	if (ROUTER_ALLOW_CROSSDOMAIN === true) {
+		array_push($file_headers, 'Access-Control-Allow-Origin: *');
 	}
 	
-	array_push($file_headers, 'Content-Type: ' . $header_mimetype);
-	array_push($file_headers, 'Last-Modified: ' . router_get_http_date($filemtime));
 	// send those headers
 	router_send_file_headers($file_headers);
 	// and now the file contents
@@ -432,6 +484,7 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 	if ($file_content_length === -1) {
 		$file_content_length_kb = intval(ceil($file_contents_length / ROUTER_KBSIZE));
 		router_warn(ROUTER_TAB . 'Downloaded 100% of ' . $file_content_length_kb . ' KB');
+		array_push($file_headers, 'Content-Length: ' . $file_contents_length);
 		
 		if ($sent_downloaded_file_headers === false) {
 			$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_trailing_slash, $index_extension);
@@ -441,17 +494,15 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 			}
 		}
 		
-		header('Content-Length: ' . $file_contents_length);
 		echo($file_contents);
 	}
 	return $file_contents_length;
 }
 
-// the internet is a series of tubes
-function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $pathname_info_extension, $pathname_no_extension, $pathname_htdocs, $index_extension = -1) {
+// all your base are belong to us
+function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $pathname_info_basename, $pathname_no_extension, $pathname_htdocs, $index_extension = -1) {
 	global $router_index_extensions;
 	global $router_base_urls;
-	global $router_extension_mimetypes;
 	
 	router_warn('Serving File From Base URLs: ' . $pathname);
 
@@ -465,25 +516,26 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 		$pathname_index = $pathname . $pathname_trailing_slash . 'index.' . $router_index_extensions[$index_extension];
 	}
 	
-	// the point of this next section is mainly to obtain four important pieces of information
-	// - the file location - if we get redirected somewhere else
+	// the point of this next section is mainly to obtain five important pieces of information
 	// - the file status code - so we know if it exists
+	// - the file location - if we get redirected somewhere else
 	// - the file's content length - so we know which percentage of it is downloaded when we stream it
-	// - the last modifed date - because Shockwave requires it
+	// - the file's last modified date - because Shockwave requires it
+	// - the file's allowed crossdomain setting - in case it's contradictory to the router allowed crossdomain setting
 	$file_pointer_resource = false;
 	$stream_meta_data = array();
 	$file_header = '';
-	$file_header_lower = '';
-	$file_header_lower_status_matches = array();
-	$file_header_lower_status_match = false;
-	$file_header_lower_matches = array();
-	$file_header_lower_match = false;
+	$file_header_status_matches = array();
+	$file_header_status_match = false;
+	$file_header_matches = array();
+	$file_header_match = false;
 	$file_headers = array();
 	$file_header_pathname_index_pos = false;
-	$file_location = '';
 	$file_status_code = -1;
+	$file_location = '';
 	$file_content_length = -1;
 	$file_last_modified = false;
+	$file_allowed_crossdomain = false;
 	$file_contents_length = 0;
 
 	// we loop through every Base URL
@@ -500,10 +552,11 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 			$stream_meta_data = stream_get_meta_data($file_pointer_resource);
 			$file_headers = array();
 			// reset these so they aren't carried over from the previous base loop
-			$file_location = '';
 			$file_status_code = -1;
+			$file_location = '';
 			$file_content_length = -1;
 			$file_last_modified = false;
+			$file_allowed_crossdomain = false;
 			$file_contents_length = 0;
 
 			if (isset($stream_meta_data) === true && isset($stream_meta_data['wrapper_data']) === true) {
@@ -514,14 +567,13 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 					//router_warn('Header: ' . $wrapper_data[$i]);
 					$file_header = $wrapper_data[$i];
 					// we'll be comparing the headers ourselves after, and they're case-insensitive
-					$file_header_lower = strtolower($file_header);
-					$file_header_lower_status_matches = array();
+					$file_header_status_matches = array();
 					// is this a Status message according to our regex?
-					$file_header_lower_status_match = preg_match(ROUTER_FILE_HEADER_STATUS_PATTERN, $file_header_lower, $file_header_lower_status_matches);
+					$file_header_status_match = preg_match(ROUTER_FILE_HEADER_STATUS_PATTERN, $file_header, $file_header_status_matches);
 					
-					if ($file_header_lower_status_match === 1) {
+					if ($file_header_status_match === 1) {
 						// yes
-						$file_status_code = intval($file_header_lower_status_matches[1]);
+						$file_status_code = intval($file_header_status_matches[1]);
 						
 						if ($file_status_code === 200) {
 							// ensure the HTTP version of the response matches that of the request (for Shockwave)
@@ -529,20 +581,20 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 						}
 					} else {
 						// this isn't a Status message, but is it a valid HTTP header?
-						$file_header_lower_matches = array();
-						$file_header_lower_match = preg_match(ROUTER_FILE_HEADER_PATTERN, $file_header_lower, $file_header_lower_matches);
+						$file_header_matches = array();
+						$file_header_match = preg_match(ROUTER_FILE_HEADER_PATTERN, $file_header, $file_header_matches);
 					
-						if ($file_header_lower_match === 1) {
+						if ($file_header_match === 1) {
 							// yes
 							// first, if there's no extension, be on the lookout for a redirect indicating this is actually a directory
-							if ($pathname_no_extension === true && $file_status_code >= 300 && $file_status_code < 400 && $file_header_lower_matches[1] === 'location') {
+							if ($pathname_no_extension === true && $file_status_code >= 300 && $file_status_code < 400 && strtolower($file_header_matches[1]) === 'location') {
 								// location header - we're redirecting elsewhere
 								// but where, relative to our current path?
-								$file_header_pathname_index_pos = strrpos($file_header, $pathname_index);
+								$file_header_pathname_index_pos = strrpos($file_header_matches[2], $pathname_index);
 								
 								if ($file_header_pathname_index_pos !== false) {
 									// $file_location will contain the redirect to forward
-									$file_location = substr($file_header, $file_header_pathname_index_pos + strlen($pathname_index));
+									$file_location = substr($file_header_matches[2], $file_header_pathname_index_pos + strlen($pathname_index));
 									
 									if (empty($file_location) === false) {
 										if ($index_extension !== -1) {
@@ -557,21 +609,22 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 							
 							if ($file_status_code === 200) {
 								// only in the scenario where the status is already OK, check for the length of the response and last modified date
-								switch ($file_header_lower_matches[1]) {
+								switch (strtolower($file_header_matches[1])) {
 									case 'content-length':
-									$file_content_length = intval($file_header_lower_matches[2]);
+									$file_content_length = intval($file_header_matches[2]);
 									break;
 									case 'last-modified':
 									$file_last_modified = true;
 									break;
+									case 'access-control-allow-origin':
+									if (ROUTER_ALLOW_CROSSDOMAIN === true) {
+										$file_header = 'Access-Control-Allow-Origin: *';
+										$file_allowed_crossdomain = true;
+									}
+									break;
 									case 'content-type':
 									// replace the mimetype if we know a different one for this file extension
-									foreach($router_extension_mimetypes as $extension => $mimetype) {
-										if ($pathname_info_extension === $extension) {
-											$file_header = 'Content-Type: ' . $mimetype;
-											break;
-										}
-									}
+									$file_header = 'Content-Type: ' . router_get_mimetype($pathname_info_basename, $file_header_matches[2]);
 								}
 								
 								// we'll put through the header to the game
@@ -586,6 +639,12 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 				if ($file_last_modified === false) {
 					// Shockwave requires last modified date
 					array_push($file_headers, 'Last-Modified: ' . router_get_http_date());
+				}
+				
+				if (ROUTER_ALLOW_CROSSDOMAIN === true) {
+					if ($file_allowed_crossdomain === false) {
+						array_push($file_headers, 'Access-Control-Allow-Origin: *');
+					}
 				}
 				
 				// we attempt to download the file
@@ -604,7 +663,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 		// no? well, if the file has no extension, maybe it's actually a directory containing an index.htm/.html file
 		// so try that next
 		if ($pathname_no_extension === true) {
-			if (router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $pathname_info_extension, $pathname_no_extension, $pathname_htdocs, $index_extension + 1) === true) {
+			if (router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $pathname_info_basename, $pathname_no_extension, $pathname_htdocs, $index_extension + 1) === true) {
 				// that was it? good
 				return true;
 			}
@@ -626,8 +685,8 @@ function router_route_pathname($pathname) {
 	// in situations where we need a trailing slash, this will be appended to the pathname
 	$pathname_trailing_slash = substr($pathname, -1) === '/' ? '' : '/';
 	$pathname_info = pathinfo($pathname);
-	$pathname_info_extension = isset($pathname_info['extension']) ? strtolower($pathname_info['extension']) : '';
-	$pathname_no_extension = empty($pathname_info_extension) === true;
+	$pathname_info_basename = $pathname_info['basename'];
+	$pathname_no_extension = isset($pathname_info['extension']) === false;
 	$http_host_lower = strtolower($_SERVER['HTTP_HOST']);
 
 	if ($http_host_lower === 'localhost' || strpos($http_host_lower, 'localhost:') === 0) {
@@ -648,18 +707,15 @@ function router_route_pathname($pathname) {
 		$pathname_cgi_bin_index = '';
 		
 		// if the file being downloaded is a script, include it instead
-		$router_script_extensions_count = count($router_script_extensions);
-
-		for ($i = 0; $i < $router_script_extensions_count; $i++) {
-			if ($pathname_info_extension === $router_script_extensions[$i]) {
-				// never allow scripts to be served anywhere except from cgi-bin
-				// if the file doesn't exist - it's an error
-				if (is_file($pathname_cgi_bin) === false) {
-					return false;
-				}
-				
-				return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_trailing_slash);
+		if (router_compare_extensions($pathname_info_basename, $router_script_extensions) === true) {
+			// never allow scripts to be served anywhere except from cgi-bin
+			// if the file doesn't exist - it's an error
+			if (is_file($pathname_cgi_bin) === false) {
+				router_warn('Not A File From CGI-BIN: ' . $pathname_cgi_bin);
+				return false;
 			}
+			
+			return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_trailing_slash);
 		}
 
 		// if the file exists in cgi-bin - even if it's empty - serve it from there
@@ -689,7 +745,7 @@ function router_route_pathname($pathname) {
 	// has the file been downloaded and saved locally before?
 	if (is_file($pathname_htdocs) === true) {
 		// serve the local file
-		$filesize = router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_extension);
+		$filesize = router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename);
 			
 		/*
 		if ($filesize === false) {
@@ -712,7 +768,7 @@ function router_route_pathname($pathname) {
 					// let's pretend this never happened if we can't actually serve the file
 					//$pathname_htdocs = $pathname_htdocs_index;
 					$index_extension_htdocs = $i;
-					$filesize = router_serve_file_from_htdocs($pathname_htdocs_index, $pathname_trailing_slash, $pathname_info_extension, $index_extension_htdocs);
+					$filesize = router_serve_file_from_htdocs($pathname_htdocs_index, $pathname_trailing_slash, $pathname_info_basename, $index_extension_htdocs);
 					
 					/*
 					if ($filesize === false) {
@@ -730,7 +786,7 @@ function router_route_pathname($pathname) {
 
 	// TAKE A SPIN NOW YOU'RE IN WITH THE TECHNO SET
 	// WE'RE GOING SURFING ON THE INTERNET
-	if (router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $pathname_info_extension, $pathname_no_extension, $pathname_htdocs) === false) {
+	if (router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $pathname_info_basename, $pathname_no_extension, $pathname_htdocs) === false) {
 		return false;
 	}
 	return true;
