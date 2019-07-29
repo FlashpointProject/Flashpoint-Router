@@ -88,12 +88,12 @@ function router_get_http_date($timestamp = null) {
 // This is taken into consideration here
 function router_compare_extensions($pathname_info_basename, $extensions) {
 	// notice this adds a period to the end of the basename
-	$pathname_info_basename_lower_period = strtolower($pathname_info_basename) . '.';
+	$pathname_info_basename_period = $pathname_info_basename . '.';
 	$extensions_count = count($extensions);
 	
 	for ($i = 0; $i < $extensions_count; $i++) {
 		// since the basename has a period on the end, we don't need two conditions
-		if (strpos($pathname_info_basename_lower_period, '.' . strtolower($extensions[$i]) . '.') !== false) {
+		if (stripos($pathname_info_basename_period, '.' . $extensions[$i] . '.') !== false) {
 			return true;
 		}
 	}
@@ -590,7 +590,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 							if ($pathname_no_extension === true && $file_status_code >= 300 && $file_status_code < 400 && strtolower($file_header_matches[1]) === 'location') {
 								// location header - we're redirecting elsewhere
 								// but where, relative to our current path?
-								$file_header_pathname_index_pos = strrpos($file_header_matches[2], $pathname_index);
+								$file_header_pathname_index_pos = strrpos($file_header_matches[2], strval($pathname_index));
 								
 								if ($file_header_pathname_index_pos !== false) {
 									// $file_location will contain the redirect to forward
@@ -689,7 +689,7 @@ function router_route_pathname($pathname) {
 	$pathname_no_extension = isset($pathname_info['extension']) === false;
 	$http_host_lower = strtolower($_SERVER['HTTP_HOST']);
 
-	if ($http_host_lower === 'localhost' || strpos($http_host_lower, 'localhost:') === 0) {
+	if ($http_host_lower === 'localhost' || stripos($http_host_lower, 'localhost:') === 0) {
 		if (empty($_SERVER['SCRIPT_NAME']) === true || $_SERVER['SCRIPT_NAME'] === '/') {
 			phpinfo();
 			return true;
