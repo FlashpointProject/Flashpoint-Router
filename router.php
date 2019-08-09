@@ -7,6 +7,7 @@
 const ROUTER_MAD4FP = false;
 const ROUTER_HTDOCS = 'htdocs';
 const ROUTER_CGI_BIN = 'cgi-bin';
+const ROUTER_ROUTE_PATHNAMES_FROM_HTDOCS_CONTENT = true;
 const ROUTER_ALLOW_CROSSDOMAIN = true;
 const ROUTER_MKDIR_MODE = 0755;
 const ROUTER_FILE_HEADER_STATUS_PATTERN = '/http\s*\/\s*[0-9]+\s*\.\s*[0-9]+\s+([0-9]+)/i';
@@ -160,12 +161,18 @@ function router_send_file_headers($file_headers) {
 				if (($file_header_lower_matches[1] !== 'connection' || $file_header_lower_matches[2] !== 'close') &&
 				($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream') &&
 				$file_header_lower_matches[1] !== 'content-disposition' &&
-				$file_header_lower_matches[1] !== 'date') {
+				$file_header_lower_matches[1] !== 'date' &&
+				(ROUTER_ALLOW_CROSSDOMAIN === false || $file_header_lower_matches[1] !== 'access-control-allow-origin')) {
 					//router_warn(ROUTER_TAB . 'Header Sent: ' . $file_headers[$i]);
 					header($file_headers[$i]);
 				}
 			}
 		}
+	}
+	
+	// this was moved here so it'll always be sent with any status code
+	if (ROUTER_ALLOW_CROSSDOMAIN === true) {
+		header('Access-Control-Allow-Origin: *');
 	}
 }
 
@@ -210,10 +217,6 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 		$_SERVER['SERVER_PROTOCOL'] . ' 200 OK',
 		'Last-Modified: ' . router_get_http_date($filemtime)
 	);
-	
-	if (ROUTER_ALLOW_CROSSDOMAIN === true) {
-		array_push($file_headers, 'Access-Control-Allow-Origin: *');
-	}
 	
 	router_send_file_headers($file_headers);
 
@@ -279,10 +282,6 @@ function router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slas
 		'Content-Type: ' . $header_mimetype,
 		'Last-Modified: ' . router_get_http_date($filemtime)
 	);
-	
-	if (ROUTER_ALLOW_CROSSDOMAIN === true) {
-		array_push($file_headers, 'Access-Control-Allow-Origin: *');
-	}
 	
 	// send those headers
 	router_send_file_headers($file_headers);
@@ -530,7 +529,6 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 	// - the file location - if we get redirected somewhere else
 	// - the file's content length - so we know which percentage of it is downloaded when we stream it
 	// - the file's last modified date - because Shockwave requires it
-	// - the file's allowed crossdomain setting - in case it's contradictory to the router allowed crossdomain setting
 	$file_pointer_resource = false;
 	$stream_meta_data = array();
 	$file_header = '';
@@ -544,7 +542,6 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 	$file_location = '';
 	$file_content_length = -1;
 	$file_last_modified = false;
-	$file_allowed_crossdomain = false;
 	$file_contents_length = 0;
 
 	// we loop through every Base URL
@@ -565,7 +562,6 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 			$file_location = '';
 			$file_content_length = -1;
 			$file_last_modified = false;
-			$file_allowed_crossdomain = false;
 			$file_contents_length = 0;
 
 			if (isset($stream_meta_data) === true && isset($stream_meta_data['wrapper_data']) === true) {
@@ -625,12 +621,6 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 									case 'last-modified':
 									$file_last_modified = true;
 									break;
-									case 'access-control-allow-origin':
-									if (ROUTER_ALLOW_CROSSDOMAIN === true) {
-										$file_header = 'Access-Control-Allow-Origin: *';
-										$file_allowed_crossdomain = true;
-									}
-									break;
 									case 'content-type':
 									// replace the mimetype if we know a different one for this file extension
 									$file_header = 'Content-Type: ' . router_get_mimetype($pathname_info_basename, $file_header_matches[2]);
@@ -648,12 +638,6 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 				if ($file_last_modified === false) {
 					// Shockwave requires last modified date
 					array_push($file_headers, 'Last-Modified: ' . router_get_http_date());
-				}
-				
-				if (ROUTER_ALLOW_CROSSDOMAIN === true) {
-					if ($file_allowed_crossdomain === false) {
-						array_push($file_headers, 'Access-Control-Allow-Origin: *');
-					}
 				}
 				
 				// we attempt to download the file
@@ -684,6 +668,58 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 	return true;
 }
 
+function router_route_pathname_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename) {
+	global $router_index_extensions;
+	
+	//router_warn('Routing Pathname from HTDOCS: ' . $pathname_htdocs);
+	
+	$pathname_htdocs_index = '';
+	
+	// has the file been downloaded and saved locally before?
+	if (is_file($pathname_htdocs) === true) {
+		// serve the local file
+		$filesize = router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename);
+			
+		/*
+		if ($filesize === false) {
+			router_warn(ROUTER_TAB . 'Failed to Serve File From ROUTER_HTDOCS');
+		}
+		*/
+		
+		// if file is real and has a size, serve it - but otherwise, we need to download it
+		if ($filesize !== 0) {
+			return true;
+		}
+	} else {
+		// if the path is to a directory, we need to handle for index HTML files
+		if (is_dir($pathname_htdocs) === true) {
+			$router_index_extensions_count = count($router_index_extensions);
+			$index_extension_htdocs = -1;
+
+			for ($i = 0; $i < $router_index_extensions_count; $i++) {
+				$pathname_htdocs_index = $pathname_htdocs . '/index.' . $router_index_extensions[$i];
+				if (is_file($pathname_htdocs_index) === true) {
+					// let's pretend this never happened if we can't actually serve the file
+					//$pathname_htdocs = $pathname_htdocs_index;
+					$index_extension_htdocs = $i;
+					$filesize = router_serve_file_from_htdocs($pathname_htdocs_index, $pathname_trailing_slash, $pathname_info_basename, $index_extension_htdocs);
+					
+					/*
+					if ($filesize === false) {
+						router_warn(ROUTER_TAB . 'Failed to Serve File From ROUTER_HTDOCS');
+					}
+					*/
+					
+					if ($filesize !== 0) {
+						return true;
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
 // the main function of the program which decides how to serve the file
 function router_route_pathname($pathname) {
 	global $router_script_extensions;
@@ -706,9 +742,7 @@ function router_route_pathname($pathname) {
 
 		$pathname = $_SERVER['SCRIPT_NAME'];
 	}
-		
-	$router_index_extensions_count = count($router_index_extensions);
-
+	
 	// if this is not specifically MAD4FP, script files should never be downloaded
 	if (ROUTER_MAD4FP !== true) {
 		$pathname_cgi_bin = ROUTER_CGI_BIN . $pathname;
@@ -733,6 +767,7 @@ function router_route_pathname($pathname) {
 		} else {
 			// also check directories for index files
 			if (is_dir($pathname_cgi_bin) === true) {
+				$router_index_extensions_count = count($router_index_extensions);
 				$index_extension_cgi_bin = -1;
 
 				for ($i = 0; $i < $router_index_extensions_count; $i++) {
@@ -747,50 +782,17 @@ function router_route_pathname($pathname) {
 			}
 		}
 	}
-
-	$pathname_htdocs = ROUTER_HTDOCS . $pathname;
-	$pathname_htdocs_index = '';
-
-	// has the file been downloaded and saved locally before?
-	if (is_file($pathname_htdocs) === true) {
-		// serve the local file
-		$filesize = router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename);
-			
-		/*
-		if ($filesize === false) {
-			router_warn(ROUTER_TAB . 'Failed to Serve File From ROUTER_HTDOCS');
-		}
-		*/
-		
-		// if file is real and has a size, serve it - but otherwise, we need to download it
-		if ($filesize !== 0) {
+	
+	if (ROUTER_ROUTE_PATHNAMES_FROM_HTDOCS_CONTENT === true) {
+		if (router_route_pathname_from_htdocs(ROUTER_HTDOCS . '/content' . $pathname, $pathname_trailing_slash, $pathname_info_basename) === true) {
 			return true;
 		}
-	} else {
-		// if the path is to a directory, we need to handle for index HTML files
-		if (is_dir($pathname_htdocs) === true) {
-			$index_extension_htdocs = -1;
+	}
 
-			for ($i = 0; $i < $router_index_extensions_count; $i++) {
-				$pathname_htdocs_index = $pathname_htdocs . '/index.' . $router_index_extensions[$i];
-				if (is_file($pathname_htdocs_index) === true) {
-					// let's pretend this never happened if we can't actually serve the file
-					//$pathname_htdocs = $pathname_htdocs_index;
-					$index_extension_htdocs = $i;
-					$filesize = router_serve_file_from_htdocs($pathname_htdocs_index, $pathname_trailing_slash, $pathname_info_basename, $index_extension_htdocs);
-					
-					/*
-					if ($filesize === false) {
-						router_warn(ROUTER_TAB . 'Failed to Serve File From ROUTER_HTDOCS');
-					}
-					*/
-					
-					if ($filesize !== 0) {
-						return true;
-					}
-				}
-			}
-		}
+	$pathname_htdocs = ROUTER_HTDOCS . $pathname;
+	
+	if (router_route_pathname_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename) === true) {
+		return true;
 	}
 
 	// TAKE A SPIN NOW YOU'RE IN WITH THE TECHNO SET
