@@ -144,16 +144,26 @@ function router_send_file_headers($file_headers) {
 			
 			if ($file_header_lower_match === 1) {
 				// this is a valid HTTP header
-				// disallow the application/octet-stream mimetype
-				// also disallow closed connections because this causes a Redirector bug
+				// disallow closed connections because this causes a Redirector bug
 				// and Flash dislikes Content-Disposition
 				// we also disallow Date because PHP already is sending it (in the wrong format but w/e)
 				if (($file_header_lower_matches[1] !== 'connection' || $file_header_lower_matches[2] !== 'close') &&
-				($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream') &&
 				$file_header_lower_matches[1] !== 'content-disposition' &&
 				$file_header_lower_matches[1] !== 'date') {
-					//router_warn(ROUTER_TAB . 'Header Sent: ' . $file_headers[$i]);
-					header($file_headers[$i]);
+					// disallow the application/octet-stream mimetype
+					if ($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream') {
+						//router_warn(ROUTER_TAB . 'Header Sent: ' . $file_headers[$i]);
+						header($file_headers[$i]);
+					} else {
+						// prevent PHP from sending a text/html header by default
+						header('Content-Type:');
+						
+						// if we're using PHP 5.3.0 or greater, we can remove the header altogether instead of sending a blank one
+						// (we can safely assume we're using at least PHP 4)
+						if (version_compare(PHP_VERSION, '5.3.0', '>=') === true) {
+							header_remove('Content-Type');
+						}
+					}
 				}
 			}
 		}
