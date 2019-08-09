@@ -100,13 +100,13 @@ function router_compare_extensions($pathname_info_basename, $extensions) {
 	return false;
 }
 
-function router_get_mimetype($pathname_info_basename, $default_mimetype = 'application/octet-stream') {
+function router_get_mimetype($pathname_info_basename, $mimetype_default = 'application/octet-stream') {
 	global $router_extension_mimetypes;
 	
 	// first, get all the extensions as an array
 	// we slice off the first element as it's not an extension
 	// if the file has no extension, this leaves us with an empty array
-	$pathname_info_basename_extensions = array_slice(explode($pathname_info_basename, '.'), 1);
+	$pathname_info_basename_extensions = array_slice(explode('.', $pathname_info_basename), 1);
 	
 	// we go from the last extension to first, since the last extension takes precedence
 	for ($i = count($pathname_info_basename_extensions) - 1; $i >= 0; $i--) {
@@ -116,7 +116,7 @@ function router_get_mimetype($pathname_info_basename, $default_mimetype = 'appli
 			}
 		}
 	}
-	return $default_mimetype;
+	return $mimetype_default;
 }
 
 // send the specified file headers
