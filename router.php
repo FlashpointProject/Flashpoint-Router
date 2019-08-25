@@ -124,7 +124,13 @@ function router_get_mimetype($pathname_info_basename, $mimetype_default = 'appli
 function router_send_file_headers($file_headers) {
 	//router_warn(ROUTER_TAB . 'Sending File Headers');
 	
+	if (headers_sent() === true) {
+		return;
+	}
+	
 	// prevent PHP from sending a text/html header by default
+	// we do this here specifically because, it's a PHP default behaviour
+	// we want to prevent on ANY status code
 	header('Content-Type:');
 	
 	// if we're using PHP 5.3.0 or greater, we can remove the header altogether instead of sending a blank one
@@ -161,8 +167,7 @@ function router_send_file_headers($file_headers) {
 				if (($file_header_lower_matches[1] !== 'connection' || $file_header_lower_matches[2] !== 'close') &&
 				($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream') &&
 				$file_header_lower_matches[1] !== 'content-disposition' &&
-				$file_header_lower_matches[1] !== 'date' &&
-				(ROUTER_ALLOW_CROSSDOMAIN === false || $file_header_lower_matches[1] !== 'access-control-allow-origin')) {
+				$file_header_lower_matches[1] !== 'date') {
 					//router_warn(ROUTER_TAB . 'Header Sent: ' . $file_headers[$i]);
 					header($file_headers[$i]);
 				}
@@ -170,7 +175,8 @@ function router_send_file_headers($file_headers) {
 		}
 	}
 	
-	// this was moved here so it'll always be sent with any status code
+	// this was moved here
+	// it's specifically here so it'll always be sent with any status code
 	if (ROUTER_ALLOW_CROSSDOMAIN === true) {
 		header('Access-Control-Allow-Origin: *');
 	}
@@ -480,7 +486,7 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 	}
 	
 	// if we managed to make the directory, save the file in htdocs if it isn't locked - but don't stop if we error in doing so
-	if ($pathname_htdocs_index) {
+	if ($pathname_htdocs_index !== false) {
 		if (@file_put_contents($pathname_htdocs_index, $file_contents) === false) {
 			router_warn(ROUTER_TAB . 'File Locked With Only Readers');
 		}
