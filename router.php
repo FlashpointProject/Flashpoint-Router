@@ -12,7 +12,7 @@ const ROUTER_ALLOW_CROSSDOMAIN = true;
 const ROUTER_MKDIR_MODE = 0755;
 const ROUTER_FILE_HEADER_STATUS_PATTERN = '/http\s*\/\s*[0-9]+\s*\.\s*[0-9]+\s+([0-9]+)/i';
 const ROUTER_FILE_HEADER_PATTERN = '/(\S+)\s*:\s*(\S+)/i';
-const ROUTER_FILE_READ_LENGTH = 32768;
+const ROUTER_FILE_READ_LENGTH = 8192;
 const ROUTER_RETRY_SLEEP = 10000;
 const ROUTER_KBSIZE = 1024;
 const ROUTER_WARN_PERCENTAGE = 50;
@@ -56,11 +56,14 @@ $router_extension_mimetypes = array(
 set_time_limit(0);
 
 // this is the stream where errors will be output
-$router_stderr = fopen('php://stderr', 'w');
+$router_file_pointer_resource_stderr = @fopen('php://stderr', 'w');
 
-function router_warn($message) {
-	global $router_stderr;
-	fwrite($router_stderr, $message . ROUTER_NEWLINE);
+function router_error($message) {
+	global $router_file_pointer_resource_stderr;
+	
+	if ($router_file_pointer_resource_stderr !== false) {
+		@fwrite($router_file_pointer_resource_stderr, $message . ROUTER_NEWLINE);
+	}
 }
 
 // get the date specified (or if unspecified, the current date) in HTTP-Date format (RFC1123)
@@ -112,6 +115,7 @@ function router_get_mimetype($pathname_info_basename, $mimetype_default = 'appli
 	// we go from the last extension to first, since the last extension takes precedence
 	for ($i = count($pathname_info_basename_extensions) - 1; $i >= 0; $i--) {
 		foreach ($router_extension_mimetypes as $extension => $mimetype) {
+			// both lowercase, for a case-insensitive compare
 			if (strtolower($pathname_info_basename_extensions[$i]) === strtolower($extension)) {
 				return $mimetype;
 			}
@@ -120,9 +124,72 @@ function router_get_mimetype($pathname_info_basename, $mimetype_default = 'appli
 	return $mimetype_default;
 }
 
+// this function will read a file in chunks
+// the individual chunks being read are significantly
+// smaller than PHP's memory limit, the caller
+// then echoes the read chunk and flushes the memory
+// so we can read large files without hitting any memory limit
+// if the read fails, the caller doesn't continue attempting
+// to read the file, but sometimes the download
+// just needs to catch up so we sleep the program
+// and try again
+function router_read_file($file_pointer_resource) {
+	//router_error(ROUTER_TAB . 'Reading File');
+	
+	if ($file_pointer_resource === false) {
+		// error, caller does not continue
+		return false;
+	}
+	
+	$file_content = @fread($file_pointer_resource, ROUTER_FILE_READ_LENGTH);
+	$file_content_length = strlen($file_content);
+
+	if ($file_content === false || $file_content_length <= 0) {
+		if (@feof($file_pointer_resource) === true) {
+			// error, caller does not continue
+			return false;
+		}
+		
+		usleep(ROUTER_RETRY_SLEEP);
+		// no error, caller continues
+		return true;
+	}
+	// no error, caller read the file
+	return $file_content;
+}
+
+// this will safely close and delete the file if the write fails
+// this prevents corrupt files from getting saved
+function router_write_file($file_pointer_resource, $pathname, $file_content) {
+	//router_error(ROUTER_TAB . 'Writing File');
+	
+	if ($file_pointer_resource === false) {
+		// error, caller does not continue
+		return false;
+	}
+	
+	if (@fwrite($file_pointer_resource, $file_content) === false) {
+		if (@fclose($file_pointer_resource) === false) {
+			router_error(ROUTER_TAB . 'Failed to Close File');
+			// error, caller does not continue
+			return false;
+		}
+		
+		if (@unlink($pathname) === false) {
+			router_error(ROUTER_TAB . 'Failed to Unlink File');
+			// error, caller does not continue
+			return false;
+		}
+		// no error, caller continues
+		return true;
+	}
+	// no error, caller wrote the file
+	return $file_content;
+}
+
 // send the specified file headers
 function router_send_file_headers($file_headers) {
-	//router_warn(ROUTER_TAB . 'Sending File Headers');
+	//router_error(ROUTER_TAB . 'Sending File Headers');
 	
 	if (headers_sent() === true) {
 		return;
@@ -151,7 +218,7 @@ function router_send_file_headers($file_headers) {
 		
 		// if it's a Status, just send it
 		if ($file_header_lower_status_match === 1) {
-			//router_warn(ROUTER_TAB . 'Status Header Sent: ' . $file_headers[$i]);
+			//router_error(ROUTER_TAB . 'Status Header Sent: ' . $file_headers[$i]);
 			header($file_headers[$i]);
 		} else {
 			// not a HTTP Status header - so let's check if this message is valid and allowed
@@ -168,7 +235,7 @@ function router_send_file_headers($file_headers) {
 				($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream') &&
 				$file_header_lower_matches[1] !== 'content-disposition' &&
 				$file_header_lower_matches[1] !== 'date') {
-					//router_warn(ROUTER_TAB . 'Header Sent: ' . $file_headers[$i]);
+					//router_error(ROUTER_TAB . 'Header Sent: ' . $file_headers[$i]);
 					header($file_headers[$i]);
 				}
 			}
@@ -186,7 +253,7 @@ function router_send_file_headers($file_headers) {
 function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_trailing_slash, $index_extension_cgi_bin = -1) {
 	global $router_index_extensions;
 	
-	router_warn('Serving File From CGI-BIN: ' . $pathname_cgi_bin);
+	router_error('Serving File From CGI-BIN: ' . $pathname_cgi_bin);
 	
 	if ($index_extension_cgi_bin >= count($router_index_extensions)) {
 		return false;
@@ -196,7 +263,7 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 	$filemtime = @filemtime($pathname_cgi_bin);
 
 	if ($filemtime === false) {
-		router_warn(ROUTER_TAB . 'File Locked With Only Readers');
+		router_error(ROUTER_TAB . 'File Locked With Only Readers');
 		return false;
 	}
 	
@@ -204,7 +271,7 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 
 	// go to the working directory of THAT script
 	if (chdir($pathname_cgi_bin_info['dirname']) === false) {
-		router_warn(ROUTER_TAB . 'Failed to Change Directory: ' . $pathname_cgi_bin_info['dirname']);
+		router_error(ROUTER_TAB . 'Failed to Change Directory: ' . $pathname_cgi_bin_info['dirname']);
 		return false;
 	}
 	
@@ -230,13 +297,13 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 	// careful! include is a language construct not a function
 	// if you change these parenthesis, it will blow up on you
 	if ((include $pathname_cgi_bin_info['basename']) === false) {
-		router_warn(ROUTER_TAB . 'Failed to Include: ' . $pathname_cgi_bin_info['basename']);
+		router_error(ROUTER_TAB . 'Failed to Include: ' . $pathname_cgi_bin_info['basename']);
 		return false;
 	}
 
 	// return to the working directory of THIS script afterwards
 	if (chdir($dirname_file) === false) {
-		router_warn(ROUTER_TAB . 'Failed to Change Directory after Including: ' . $dirname_file);
+		router_error(ROUTER_TAB . 'Failed to Change Directory after Including: ' . $dirname_file);
 		return false;
 	}
 	return true;
@@ -246,25 +313,33 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 function router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename, $index_extension_htdocs = -1) {
 	global $router_index_extensions;
 	
-	router_warn('Serving File From HTDOCS: ' . $pathname_htdocs);
+	router_error('Serving File From HTDOCS: ' . $pathname_htdocs);
+	
+	// this function always returns filesize, and a filesize of zero is a fail
+	// however when this function fails we just continue to try and download
+	// the file from the internet
+	$filesize = 0;
 	
 	if ($index_extension_htdocs >= count($router_index_extensions)) {
-		return false;
+		return $filesize;
 	}
 	
 	// if we fail to get any of these, bail
 	$filesize = @filesize($pathname_htdocs);
 	$filemtime = @filemtime($pathname_htdocs);
-	$file_contents = @file_get_contents($pathname_htdocs);
+	$file_pointer_resource_htdocs = @fopen($pathname_htdocs, 'rb');
 
-	if ($filesize === false || $filemtime === false || $file_contents === false) {
-		router_warn(ROUTER_TAB . 'File Locked With Only Readers');
-		return false;
+	if ($filesize === false || $filemtime === false || $file_pointer_resource_htdocs === false) {
+		router_error(ROUTER_TAB . 'File Locked With Only Readers');
+		$filesize = 0;
+		return $filesize;
 	}
 
 	// empty files are ignored as if they don't exist (because Archive.org serves empty files instead of 404'ing)
 	if ($filesize <= 0) {
-		router_warn(ROUTER_TAB . 'Empty File');
+		router_error(ROUTER_TAB . 'Empty File');
+		// in case filesize is somehow negative, we clamp it to zero bytes size
+		$filesize = 0;
 		return $filesize;
 	}
 	
@@ -291,40 +366,66 @@ function router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slas
 	
 	// send those headers
 	router_send_file_headers($file_headers);
+	
 	// and now the file contents
-	echo($file_contents);
+	// we use less memory by reading the file in chunks
+	// this allows us to output large files without eating up all that memory
+	while (@feof($file_pointer_resource_htdocs) === false) {
+		$read_file = router_read_file($file_pointer_resource_htdocs);
+		
+		if ($read_file === false) {
+			break;
+		} else {
+			if ($read_file === true) {
+				continue;
+			}
+		}
+		
+		echo($read_file);
+		// clean out the buffer memory so less memory is used
+		flush();
+	}
+	
+	if (@fclose($file_pointer_resource_htdocs) === false) {
+		router_error(ROUTER_TAB . 'Failed to Close File');
+		$filesize = 0;
+	}
 	return $filesize;
 }
 
 // get a file pointer resource (which can be read) from a URL
-function router_get_file_pointer_resource_from_url($url) {
-	router_warn(ROUTER_TAB . 'Getting File Pointer Resource From URL: ' . $url);
+function router_create_file_pointer_resource_from_url($url) {
+	router_error(ROUTER_TAB . 'Creating File Pointer Resource From URL: ' . $url);
 	
 	// please Archive.org's API but also keep other servers happy
 	$url = str_ireplace('%3A', ':', str_ireplace('%2F', '/', rawurlencode($url)));
+	
+	// I would say data is a terrible variable name
+	// but at least davidar's router worked the first time
+	// so I can't rightly throw any shade around now can I
+	$file_pointer_resource = @fopen($url, 'rb');
 
-	try {
-		// I would say data is a terrible variable name
-		// but at least davidar's router worked the first time
-		// so I can't rightly throw any shade around now can I
-		$file_pointer_resource = @fopen($url, 'rb');
-
-		if ($file_pointer_resource === false) {
-			router_warn(ROUTER_TAB . 'Failed to Open File');
-			return false;
-		}
-
-		// if we're already at the end of the file - it's empty
-		if (feof($file_pointer_resource) === true) {
-			router_warn(ROUTER_TAB . 'Empty File');
-			return false;
-		}
+	if ($file_pointer_resource === false) {
+		router_error(ROUTER_TAB . 'Failed to Open File');
 		return $file_pointer_resource;
-	} catch (Exception $e) {
-		//router_warn(ROUTER_TAB . 'Failed to Get File Pointer Resource From URL: ' . $e);
-		// Fail silently.
 	}
-	return false;
+
+	// if we're already at the end of the file - it's empty
+	if (@feof($file_pointer_resource) === true) {
+		router_error(ROUTER_TAB . 'Empty File');
+		$file_pointer_resource = false;
+	}
+	return $file_pointer_resource;
+}
+
+function router_destroy_file_pointer_resource_from_url($file_pointer_resource) {
+	//router_error(ROUTER_TAB . 'Destroying File Pointer Resource From URL');
+
+	if (@fclose($file_pointer_resource) === false) {
+		router_error(ROUTER_TAB . 'Failed to Close File');
+		return false;
+	}
+	return true;
 }
 
 // specifically for downloaded files, send the correct headers
@@ -332,10 +433,11 @@ function router_get_file_pointer_resource_from_url($url) {
 function router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_trailing_slash, $index_extension = -1) {
 	global $router_index_extensions;
 	
-	//router_warn(ROUTER_TAB . 'Sending Downloaded File Headers');
+	//router_error(ROUTER_TAB . 'Sending Downloaded File Headers');
 	
 	if ($index_extension >= count($router_index_extensions)) {
-		return $file_contents_length;
+		// error, caller does not continue
+		return false;
 	}
 	
 	// if we are going to an index.htm/.html file...
@@ -353,60 +455,64 @@ function router_send_downloaded_file_headers($file_headers, $file_location, $fil
 			'Location: ' . $file_location
 		);
 		router_send_file_headers($file_headers);
+		// no error, caller returns this length
 		return $file_contents_length;
 	}
 	
 	// otherwise just send the normal 200 OK header
 	router_send_file_headers($file_headers);
+	// no error, caller continues
 	return true;
 }
 
-// download the file (it's pretty self explanatory dude)
-function router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $pathname_trailing_slash, $pathname_htdocs, $index_extension = 1) {
+// downloads a file to a specific location, in htdocs
+// if it fails to download it as a file, the function
+// continues to download the rest of the file and echo it
+// (e.g., if the user is out of disk space or the file is locked)
+function router_download_file_htdocs($file_pointer_resource, $file_headers, $file_location, $file_content_length, $file_pointer_resource_htdocs_index, $pathname_trailing_slash, $pathname_htdocs_index, $index_extension = -1) {
 	global $router_index_extensions;
 	
-	router_warn(ROUTER_TAB . 'Downloading File To: ' . $pathname_htdocs);
+	//router_error(ROUTER_TAB . 'Downloading File To HTDOCS');
+	
+	// this function always returns the length, if it's zero, it is a fail
+	$file_contents_length = 0;
+	
+	if ($index_extension >= count($router_index_extensions)) {
+		return $file_contents_length;
+	}
 	
 	$file_content_length_kb = intval(ceil($file_content_length / ROUTER_KBSIZE));
 	$file_contents = '';
 	$file_contents_length = 0;
 	$sent_downloaded_file_headers = false;
-	$read_file = '';
-	$read_file_length = 0;
-	
-	if ($index_extension >= count($router_index_extensions)) {
-		return $file_contents_length;
-	}
-
+	$read_file = false;
+	$wrote_file = false;
 	$next_warn_percentage = ROUTER_WARN_PERCENTAGE;
 	$prev_warn_length = 0;
 	$next_warn_length = $file_content_length * ($next_warn_percentage / 100);
 	$next_warn_iteration = 0;
-
+	
+	/*
 	if ($file_content_length === -1) {
-		//router_warn(ROUTER_TAB . 'Filesize: Unknown');
+		router_error(ROUTER_TAB . 'Filesize: Unknown');
 	} else {
-		//router_warn(ROUTER_TAB . 'Filesize: ' . $file_content_length_kb . ' KB');
+		router_error(ROUTER_TAB . 'Filesize: ' . $file_content_length_kb . ' KB');
 	}
-
+	*/
+	
 	// while there's still more to download
-	while (feof($file_pointer_resource) === false) {
-		$read_file = @fread($file_pointer_resource, ROUTER_FILE_READ_LENGTH);
-
+	while (@feof($file_pointer_resource) === false) {
+		$read_file = router_read_file($file_pointer_resource);
+		
 		if ($read_file === false) {
-			usleep(ROUTER_RETRY_SLEEP);
-			continue;
+			break;
+		} else {
+			if ($read_file === true) {
+				continue;
+			}
 		}
-
-		$read_file_length = strlen($read_file);
-
-		if ($read_file_length <= 0) {
-			usleep(ROUTER_RETRY_SLEEP);
-			continue;
-		}
-
-		$file_contents .= $read_file;
-		$file_contents_length += $read_file_length;
+		
+		$file_contents_length += strlen($read_file);
 
 		// if we know the length
 		if ($file_content_length !== -1) {
@@ -416,17 +522,37 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 				if ($sent_downloaded_file_headers === false) {
 					$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_trailing_slash, $index_extension);
 					
-					if ($sent_downloaded_file_headers !== true) {
-						return $sent_downloaded_file_headers;
+					if ($sent_downloaded_file_headers === false) {
+						$file_contents_length = 0;
+						return $file_contents_length;
+					} else {
+						if ($sent_downloaded_file_headers === $file_contents_length) {
+							return $file_contents_length;
+						}
 					}
 				}
 				
 				echo($read_file);
+				
+				if ($file_pointer_resource_htdocs_index !== false) {
+					$wrote_file = router_write_file($file_pointer_resource_htdocs_index, $pathname_htdocs_index, $read_file);
+					
+					if ($wrote_file === false) {
+						$file_contents_length = 0;
+						return $file_contents_length;
+					} else {
+						if ($wrote_file === true) {
+							$file_pointer_resource_htdocs_index = false;
+						}
+					}
+				}
+				
+				flush();
 			}
 
 			// progress meter
 			while ($file_contents_length >= $next_warn_length && $prev_warn_length < $next_warn_length) {
-				router_warn(ROUTER_TAB . 'Downloaded and Streamed ' . $next_warn_percentage . '% of ' . $file_content_length_kb . ' KB');
+				router_error(ROUTER_TAB . 'Downloaded and Streamed ' . $next_warn_percentage . '% of ' . $file_content_length_kb . ' KB');
 				$next_warn_percentage += ROUTER_WARN_PERCENTAGE;
 
 				if ($next_warn_percentage > 100) {
@@ -438,13 +564,14 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 			}
 		} else {
 			// we don't have enough info to stream the file... we have to download it whole
+			$file_contents .= $read_file;
 			$next_warn_iteration++;
 
 			// progress meter - except we don't know what percent we're at
 			// so just warn every few iterations
 			if ($next_warn_iteration > ROUTER_WARN_PERCENTAGE) {
 				$file_content_length_kb = intval(ceil($file_contents_length / ROUTER_KBSIZE));
-				router_warn(ROUTER_TAB . 'Downloaded ' . $file_content_length_kb . ' KB');
+				router_error(ROUTER_TAB . 'Downloaded ' . $file_content_length_kb . ' KB');
 				$next_warn_iteration = 0;
 			}
 		}
@@ -452,15 +579,69 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 
 	// empty file means fail
 	if ($file_contents_length === 0) {
-		router_warn(ROUTER_TAB . 'Empty File');
+		router_error(ROUTER_TAB . 'Empty File');
+		return $file_contents_length;
+	}
+
+	// if we didn't know the length - well, the download finished so we do now, so handle for that
+	if ($file_content_length === -1) {
+		$file_content_length_kb = intval(ceil($file_contents_length / ROUTER_KBSIZE));
+		router_error(ROUTER_TAB . 'Downloaded 100% of ' . $file_content_length_kb . ' KB');
+		array_push($file_headers, 'Content-Length: ' . $file_contents_length);
+		
+		if ($sent_downloaded_file_headers === false) {
+			$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_trailing_slash, $index_extension);
+			
+			if ($sent_downloaded_file_headers === false) {
+				$file_contents_length = 0;
+				return $file_contents_length;
+			} else {
+				if ($sent_downloaded_file_headers === $file_contents_length) {
+					return $file_contents_length;
+				}
+			}
+		}
+		
+		echo($file_contents);
+		
+		if ($file_pointer_resource_htdocs_index !== false) {
+			$wrote_file = router_write_file($file_pointer_resource_htdocs_index, $pathname_htdocs_index, $read_file);
+			
+			if ($wrote_file === false) {
+				$file_contents_length = 0;
+				return $file_contents_length;
+			} else {
+				if ($wrote_file === true) {
+					$file_pointer_resource_htdocs_index = false;
+				}
+			}
+		}
+		
+		flush();
+	}
+	return $file_contents_length;
+}
+
+// download the file (it's pretty self explanatory dude)
+function router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $pathname_trailing_slash, $pathname_htdocs, $index_extension = 1) {
+	global $router_index_extensions;
+	
+	router_error(ROUTER_TAB . 'Downloading File To: ' . $pathname_htdocs);
+	
+	// this function always returns the length, if it's zero, it is a fail
+	$file_contents_length = 0;
+	
+	if ($index_extension >= count($router_index_extensions)) {
 		return $file_contents_length;
 	}
 	
+	// this is where we handle creating the file to download in htdocs
 	$pathname_htdocs_index = false;
+	$file_pointer_resource_htdocs_index = false;
 	
 	if ($index_extension !== -1) {
 		// treat as directory name
-		if (is_dir($pathname_htdocs) !== false || @mkdir($pathname_htdocs, ROUTER_MKDIR_MODE, true) !== false) {
+		if (@is_dir($pathname_htdocs) !== false || @mkdir($pathname_htdocs, ROUTER_MKDIR_MODE, true) !== false) {
 			// do NOT use $pathname_trailing_slash here because $pathname_htdocs may be $pathname_htdocs_index
 			$pathname_htdocs_index = $pathname_htdocs . (substr($pathname_htdocs, -1) === '/' ? '' : '/') . 'index.' . $router_index_extensions[$index_extension];
 		}
@@ -470,7 +651,7 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 			// treat as directory name because even though there is no file extension
 			// and we weren't redirected to an index, it has a trailing slash
 			if (count($router_index_extensions) !== 0) {
-				if (is_dir($pathname_htdocs) !== false || @mkdir($pathname_htdocs, ROUTER_MKDIR_MODE, true) !== false) {
+				if (@is_dir($pathname_htdocs) !== false || @mkdir($pathname_htdocs, ROUTER_MKDIR_MODE, true) !== false) {
 					// yes, it does have a trailing slash already
 					$pathname_htdocs_index = $pathname_htdocs . 'index.' . $router_index_extensions[0];
 				}
@@ -479,7 +660,7 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 			// treat as filename
 			$pathname_htdocs_info = pathinfo($pathname_htdocs);
 			
-			if (is_dir($pathname_htdocs_info['dirname']) !== false || @mkdir($pathname_htdocs_info['dirname'], ROUTER_MKDIR_MODE, true) !== false) {
+			if (@is_dir($pathname_htdocs_info['dirname']) !== false || @mkdir($pathname_htdocs_info['dirname'], ROUTER_MKDIR_MODE, true) !== false) {
 				$pathname_htdocs_index = $pathname_htdocs;
 			}
 		}
@@ -487,28 +668,33 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 	
 	// if we managed to make the directory, save the file in htdocs if it isn't locked - but don't stop if we error in doing so
 	if ($pathname_htdocs_index !== false) {
-		if (@file_put_contents($pathname_htdocs_index, $file_contents) === false) {
-			router_warn(ROUTER_TAB . 'File Locked With Only Readers');
+		$file_pointer_resource_htdocs_index = @fopen($pathname_htdocs_index, 'wb');
+		
+		if ($file_pointer_resource_htdocs_index === false) {
+			router_error(ROUTER_TAB . 'File Locked With Only Readers');
 		}
 	} else {
-		router_warn(ROUTER_TAB . 'Failed to Make Directory');
+		router_error(ROUTER_TAB . 'Failed to Make Directory');
 	}
-
-	// if we didn't know the length - well, the download finished so we do now, so handle for that
-	if ($file_content_length === -1) {
-		$file_content_length_kb = intval(ceil($file_contents_length / ROUTER_KBSIZE));
-		router_warn(ROUTER_TAB . 'Downloaded 100% of ' . $file_content_length_kb . ' KB');
-		array_push($file_headers, 'Content-Length: ' . $file_contents_length);
-		
-		if ($sent_downloaded_file_headers === false) {
-			$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_trailing_slash, $index_extension);
-			
-			if ($sent_downloaded_file_headers !== true) {
-				return $sent_downloaded_file_headers;
-			}
+	
+	// now we actually download it to htdocs
+	$file_contents_length = router_download_file_htdocs($file_pointer_resource, $file_headers, $file_location, $file_content_length, $file_pointer_resource_htdocs_index, $pathname_trailing_slash, $pathname_htdocs_index, $index_extension);
+	
+	if ($file_pointer_resource_htdocs_index !== false) {
+		if (@fclose($file_pointer_resource_htdocs_index) === false) {
+			router_error(ROUTER_TAB . 'Failed to Close File');
+			$file_contents_length = 0;
+			return $file_contents_length;
 		}
 		
-		echo($file_contents);
+		// if the file is empty, delete it
+		if ($file_contents_length === 0) {
+			if (@unlink($pathname_htdocs_index) === false) {
+				router_error(ROUTER_TAB . 'Failed to Unlink File');
+				$file_contents_length = 0;
+				return $file_contents_length;
+			}
+		}
 	}
 	return $file_contents_length;
 }
@@ -518,7 +704,14 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 	global $router_index_extensions;
 	global $router_base_urls;
 	
-	router_warn('Serving File From Base URLs: ' . $pathname);
+	router_error('Serving File From Base URLs: ' . $pathname);
+	
+	// the function stream_get_meta_data that we must use is in 4.3.0 minimum
+	// we assume at least PHP 4 is in use elsewhere in the script
+	if (version_compare(PHP_VERSION, '4.3.0', '<') === true) {
+		router_error('Unsupported PHP Version: ' . PHP_VERSION);
+		return false;
+	}
 
 	$pathname_index = $pathname;
 	
@@ -555,8 +748,8 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 	// if we get an empty file, we also try for index.htm/.html
 	// (at which point which extension we're currently attempting is defined by $index_extensions)
 	foreach ($router_base_urls as $base => $url) {
-		router_warn(ROUTER_TAB . 'Using Base: ' . $base);
-		$file_pointer_resource = router_get_file_pointer_resource_from_url($url . $pathname_index);
+		router_error(ROUTER_TAB . 'Using Base: ' . $base);
+		$file_pointer_resource = router_create_file_pointer_resource_from_url($url . $pathname_index);
 
 		if ($file_pointer_resource !== false) {
 			// sometimes there is a 301 Redirect, in which case two headers are found this way
@@ -575,7 +768,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 				$wrapper_data_count = count($wrapper_data);
 
 				for ($i = 0; $i < $wrapper_data_count; $i++) {
-					//router_warn('Header: ' . $wrapper_data[$i]);
+					//router_error('Header: ' . $wrapper_data[$i]);
 					$file_header = $wrapper_data[$i];
 					// we'll be comparing the headers ourselves after, and they're case-insensitive
 					$file_header_status_matches = array();
@@ -651,8 +844,18 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 				
 				// and if we get a file with an actual length back, we can finally end this loop
 				if ($file_contents_length !== 0) {
+					if (router_destroy_file_pointer_resource_from_url($file_pointer_resource) === false) {
+						router_error(ROUTER_TAB . 'Failed to Destroy File Pointer Resource From URL');
+						return false;
+					}
+					
 					break;
 				}
+			}
+			
+			if (router_destroy_file_pointer_resource_from_url($file_pointer_resource) === false) {
+				router_error(ROUTER_TAB . 'Failed to Destroy File Pointer Resource From URL');
+				return false;
 			}
 		}
 	}
@@ -677,18 +880,18 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 function router_route_pathname_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename) {
 	global $router_index_extensions;
 	
-	//router_warn('Routing Pathname from HTDOCS: ' . $pathname_htdocs);
+	//router_error('Routing Pathname from HTDOCS: ' . $pathname_htdocs);
 	
 	$pathname_htdocs_index = '';
 	
 	// has the file been downloaded and saved locally before?
-	if (is_file($pathname_htdocs) === true) {
+	if (@is_file($pathname_htdocs) === true) {
 		// serve the local file
 		$filesize = router_serve_file_from_htdocs($pathname_htdocs, $pathname_trailing_slash, $pathname_info_basename);
 			
 		/*
 		if ($filesize === false) {
-			router_warn(ROUTER_TAB . 'Failed to Serve File From ROUTER_HTDOCS');
+			router_error(ROUTER_TAB . 'Failed to Serve File From ROUTER_HTDOCS');
 		}
 		*/
 		
@@ -698,13 +901,13 @@ function router_route_pathname_from_htdocs($pathname_htdocs, $pathname_trailing_
 		}
 	} else {
 		// if the path is to a directory, we need to handle for index HTML files
-		if (is_dir($pathname_htdocs) === true) {
+		if (@is_dir($pathname_htdocs) === true) {
 			$router_index_extensions_count = count($router_index_extensions);
 			$index_extension_htdocs = -1;
 
 			for ($i = 0; $i < $router_index_extensions_count; $i++) {
 				$pathname_htdocs_index = $pathname_htdocs . '/index.' . $router_index_extensions[$i];
-				if (is_file($pathname_htdocs_index) === true) {
+				if (@is_file($pathname_htdocs_index) === true) {
 					// let's pretend this never happened if we can't actually serve the file
 					//$pathname_htdocs = $pathname_htdocs_index;
 					$index_extension_htdocs = $i;
@@ -712,7 +915,7 @@ function router_route_pathname_from_htdocs($pathname_htdocs, $pathname_trailing_
 					
 					/*
 					if ($filesize === false) {
-						router_warn(ROUTER_TAB . 'Failed to Serve File From ROUTER_HTDOCS');
+						router_error(ROUTER_TAB . 'Failed to Serve File From ROUTER_HTDOCS');
 					}
 					*/
 					
@@ -731,7 +934,7 @@ function router_route_pathname($pathname) {
 	global $router_script_extensions;
 	global $router_index_extensions;
 	
-	//router_warn('Routing Pathname: ' . $pathname);
+	//router_error('Routing Pathname: ' . $pathname);
 	
 	// in situations where we need a trailing slash, this will be appended to the pathname
 	$pathname_trailing_slash = substr($pathname, -1) === '/' ? '' : '/';
@@ -759,8 +962,8 @@ function router_route_pathname($pathname) {
 		if (router_compare_extensions($pathname_info_basename, $router_script_extensions) === true) {
 			// never allow scripts to be served anywhere except from cgi-bin
 			// if the file doesn't exist - it's an error
-			if (is_file($pathname_cgi_bin) === false) {
-				router_warn('Not A File From CGI-BIN: ' . $pathname_cgi_bin);
+			if (@is_file($pathname_cgi_bin) === false) {
+				router_error('Not A File From CGI-BIN: ' . $pathname_cgi_bin);
 				return false;
 			}
 			
@@ -768,17 +971,17 @@ function router_route_pathname($pathname) {
 		}
 
 		// if the file exists in cgi-bin - even if it's empty - serve it from there
-		if (is_file($pathname_cgi_bin) === true) {
+		if (@is_file($pathname_cgi_bin) === true) {
 			return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_trailing_slash);
 		} else {
 			// also check directories for index files
-			if (is_dir($pathname_cgi_bin) === true) {
+			if (@is_dir($pathname_cgi_bin) === true) {
 				$router_index_extensions_count = count($router_index_extensions);
 				$index_extension_cgi_bin = -1;
 
 				for ($i = 0; $i < $router_index_extensions_count; $i++) {
 					$pathname_cgi_bin_index = $pathname_cgi_bin . '/index.' . $router_index_extensions[$i];
-					if (is_file($pathname_cgi_bin_index) === true) {
+					if (@is_file($pathname_cgi_bin_index) === true) {
 						//$pathname_cgi_bin = $pathname_cgi_bin_index;
 						$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
 						$index_extension_cgi_bin = $i;
@@ -803,10 +1006,11 @@ function router_route_pathname($pathname) {
 
 	// TAKE A SPIN NOW YOU'RE IN WITH THE TECHNO SET
 	// WE'RE GOING SURFING ON THE INTERNET
-	if (router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $pathname_info_basename, $pathname_no_extension, $pathname_htdocs) === false) {
-		return false;
+	if (router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $pathname_info_basename, $pathname_no_extension, $pathname_htdocs) === true) {
+		return true;
 	}
-	return true;
+	// we're out of ways to route the file
+	return false;
 }
 
 // if this is MAD4FP - the Base URL should be the "real internet"
@@ -817,9 +1021,12 @@ if (ROUTER_MAD4FP === true) {
 
 // start the program...
 if (router_route_pathname('/' . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) === false) {
-	//router_warn(ROUTER_TAB . 'Failed to Route Pathname');
+	//router_error(ROUTER_TAB . 'Failed to Route Pathname');
 	// let's send this header explicitly
 	router_send_file_headers(array($_SERVER['SERVER_PROTOCOL'] . ' 404 Not Found'));
-	//return false;
+}
+
+if ($router_file_pointer_resource_stderr !== false) {
+	@fclose($router_file_pointer_resource_stderr);
 }
 ?>
