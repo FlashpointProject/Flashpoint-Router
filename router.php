@@ -593,7 +593,7 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 		// attempt to write the file BEFORE headers
 		// if it fails, at least we didn't send bad headers
 		if ($file_pointer_resource_htdocs_index !== false) {
-			$wrote_file = router_write_file($file_pointer_resource_htdocs_index, $pathname_htdocs_index, $read_file);
+			$wrote_file = router_write_file($file_pointer_resource_htdocs_index, $pathname_htdocs_index, $file_contents);
 			
 			if ($wrote_file === false) {
 				//$file_contents_length = 0;
