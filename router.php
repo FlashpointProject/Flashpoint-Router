@@ -141,10 +141,10 @@ function router_read_file($file_pointer_resource) {
 		return false;
 	}
 	
-	$file_content = @fread($file_pointer_resource, ROUTER_FILE_READ_LENGTH);
-	$file_content_length = strlen($file_content);
+	$read_file = @fread($file_pointer_resource, ROUTER_FILE_READ_LENGTH);
+	$read_file_length = strlen($read_file);
 
-	if ($file_content === false || $file_content_length <= 0) {
+	if ($read_file === false || $read_file_length <= 0) {
 		if (@feof($file_pointer_resource) === true) {
 			// error, caller does not continue
 			return false;
@@ -155,12 +155,12 @@ function router_read_file($file_pointer_resource) {
 		return true;
 	}
 	// no error, caller read the file
-	return $file_content;
+	return $read_file;
 }
 
 // this will safely close and delete the file if the write fails
 // this prevents corrupt files from getting saved
-function router_write_file($file_pointer_resource, $pathname, $file_content) {
+function router_write_file($file_pointer_resource, $pathname, $wrote_file) {
 	//router_error(ROUTER_TAB . 'Writing File');
 	
 	if ($file_pointer_resource === false) {
@@ -168,7 +168,7 @@ function router_write_file($file_pointer_resource, $pathname, $file_content) {
 		return false;
 	}
 	
-	if (@fwrite($file_pointer_resource, $file_content) === false) {
+	if (@fwrite($file_pointer_resource, $wrote_file) === false) {
 		if (@fclose($file_pointer_resource) === false) {
 			router_error(ROUTER_TAB . 'Failed to Close File');
 			// error, caller does not continue
@@ -184,7 +184,7 @@ function router_write_file($file_pointer_resource, $pathname, $file_content) {
 		return true;
 	}
 	// no error, caller wrote the file
-	return $file_content;
+	return $wrote_file;
 }
 
 // send the specified file headers
@@ -518,6 +518,21 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 		if ($file_content_length !== -1) {
 			// stream it!
 			if ($file_contents_length !== 0) {
+				// attempt to write the file BEFORE headers
+				// if it fails, at least we didn't send bad headers
+				if ($file_pointer_resource_htdocs_index !== false) {
+					$wrote_file = router_write_file($file_pointer_resource_htdocs_index, $pathname_htdocs_index, $read_file);
+					
+					if ($wrote_file === false) {
+						//$file_contents_length = 0;
+						return $file_contents_length;
+					} else {
+						if ($wrote_file === true) {
+							$file_pointer_resource_htdocs_index = false;
+						}
+					}
+				}
+				
 				// send the headers, but only if we have not already
 				if ($sent_downloaded_file_headers === false) {
 					$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_trailing_slash, $index_extension);
@@ -533,20 +548,6 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 				}
 				
 				echo($read_file);
-				
-				if ($file_pointer_resource_htdocs_index !== false) {
-					$wrote_file = router_write_file($file_pointer_resource_htdocs_index, $pathname_htdocs_index, $read_file);
-					
-					if ($wrote_file === false) {
-						$file_contents_length = 0;
-						return $file_contents_length;
-					} else {
-						if ($wrote_file === true) {
-							$file_pointer_resource_htdocs_index = false;
-						}
-					}
-				}
-				
 				flush();
 			}
 
@@ -589,6 +590,21 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 		router_error(ROUTER_TAB . 'Downloaded 100% of ' . $file_content_length_kb . ' KB');
 		array_push($file_headers, 'Content-Length: ' . $file_contents_length);
 		
+		// attempt to write the file BEFORE headers
+		// if it fails, at least we didn't send bad headers
+		if ($file_pointer_resource_htdocs_index !== false) {
+			$wrote_file = router_write_file($file_pointer_resource_htdocs_index, $pathname_htdocs_index, $read_file);
+			
+			if ($wrote_file === false) {
+				//$file_contents_length = 0;
+				return $file_contents_length;
+			} else {
+				if ($wrote_file === true) {
+					$file_pointer_resource_htdocs_index = false;
+				}
+			}
+		}
+		
 		if ($sent_downloaded_file_headers === false) {
 			$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_trailing_slash, $index_extension);
 			
@@ -603,20 +619,6 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 		}
 		
 		echo($file_contents);
-		
-		if ($file_pointer_resource_htdocs_index !== false) {
-			$wrote_file = router_write_file($file_pointer_resource_htdocs_index, $pathname_htdocs_index, $read_file);
-			
-			if ($wrote_file === false) {
-				$file_contents_length = 0;
-				return $file_contents_length;
-			} else {
-				if ($wrote_file === true) {
-					$file_pointer_resource_htdocs_index = false;
-				}
-			}
-		}
-		
 		flush();
 	}
 	return $file_contents_length;
