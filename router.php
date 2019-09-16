@@ -693,7 +693,6 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 		if ($file_contents_length === 0) {
 			if (@unlink($pathname_htdocs_index) === false) {
 				router_error(ROUTER_TAB . 'Failed to Unlink File');
-				$file_contents_length = 0;
 				return $file_contents_length;
 			}
 		}
