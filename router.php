@@ -270,7 +270,7 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 	$dirname_file = dirname(__FILE__);
 
 	// go to the working directory of THAT script
-	if (chdir($pathname_cgi_bin_info['dirname']) === false) {
+	if (@chdir($pathname_cgi_bin_info['dirname']) === false) {
 		router_error(ROUTER_TAB . 'Failed to Change Directory: ' . $pathname_cgi_bin_info['dirname']);
 		return false;
 	}
@@ -302,7 +302,7 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 	}
 
 	// return to the working directory of THIS script afterwards
-	if (chdir($dirname_file) === false) {
+	if (@chdir($dirname_file) === false) {
 		router_error(ROUTER_TAB . 'Failed to Change Directory after Including: ' . $dirname_file);
 		return false;
 	}
