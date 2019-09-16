@@ -724,7 +724,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_trailing_slash, $
 		$pathname_index = $pathname . $pathname_trailing_slash . 'index.' . $router_index_extensions[$index_extension];
 	}
 	
-	// the point of this next section is mainly to obtain five important pieces of information
+	// the point of this next section is mainly to obtain four important pieces of information
 	// - the file status code - so we know if it exists
 	// - the file location - if we get redirected somewhere else
 	// - the file's content length - so we know which percentage of it is downloaded when we stream it
