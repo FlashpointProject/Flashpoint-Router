@@ -643,7 +643,7 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 	
 	if ($index_extension !== -1) {
 		// treat as directory name
-		if (@is_dir($pathname_htdocs) !== false || @mkdir($pathname_htdocs, ROUTER_MKDIR_MODE, true) !== false) {
+		if (@is_dir($pathname_htdocs) === true || @mkdir($pathname_htdocs, ROUTER_MKDIR_MODE, true) === true) {
 			// do NOT use $pathname_trailing_slash here because $pathname_htdocs may be $pathname_htdocs_index
 			$pathname_htdocs_index = $pathname_htdocs . (substr($pathname_htdocs, -1) === '/' ? '' : '/') . 'index.' . $router_index_extensions[$index_extension];
 		}
@@ -652,8 +652,8 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 		if (substr($pathname_htdocs, -1) === '/') {
 			// treat as directory name because even though there is no file extension
 			// and we weren't redirected to an index, it has a trailing slash
-			if (count($router_index_extensions) !== 0) {
-				if (@is_dir($pathname_htdocs) !== false || @mkdir($pathname_htdocs, ROUTER_MKDIR_MODE, true) !== false) {
+			if (count($router_index_extensions) > 0) {
+				if (@is_dir($pathname_htdocs) === true || @mkdir($pathname_htdocs, ROUTER_MKDIR_MODE, true) === true) {
 					// yes, it does have a trailing slash already
 					$pathname_htdocs_index = $pathname_htdocs . 'index.' . $router_index_extensions[0];
 				}
@@ -662,7 +662,7 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 			// treat as filename
 			$pathname_htdocs_info = pathinfo($pathname_htdocs);
 			
-			if (@is_dir($pathname_htdocs_info['dirname']) !== false || @mkdir($pathname_htdocs_info['dirname'], ROUTER_MKDIR_MODE, true) !== false) {
+			if (@is_dir($pathname_htdocs_info['dirname']) === true || @mkdir($pathname_htdocs_info['dirname'], ROUTER_MKDIR_MODE, true) === true) {
 				$pathname_htdocs_index = $pathname_htdocs;
 			}
 		}
@@ -939,7 +939,7 @@ function router_route_pathname($pathname) {
 	
 	$pathname_search_hash = '';
 	
-	if (ROUTER_BUILD_HTTP_QUERY === true) {
+	if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true) {
 		// $_SERVER['QUERY_STRING'] does not work in this environment
 		$pathname_search_hash = http_build_query($_GET);
 		
