@@ -952,7 +952,7 @@ function router_route_pathname($pathname) {
 	$pathname_trailing_slash = substr($pathname, -1) === '/' ? '' : '/';
 	$pathname_info = pathinfo($pathname);
 	$pathname_info_basename = $pathname_info['basename'];
-	$pathname_no_extension = isset($pathname_info['extension']) === false;
+	$pathname_no_extension = (isset($pathname_info['extension']) === false || $pathname_trailing_slash === '');
 	$http_host_lower = strtolower($_SERVER['HTTP_HOST']);
 
 	if ($http_host_lower === 'localhost' || stripos($http_host_lower, 'localhost:') === 0) {
