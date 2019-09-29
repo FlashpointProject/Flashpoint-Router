@@ -27,7 +27,8 @@ $router_base_urls = array(
 	// be sure to change this URL for every new version release!
 	'Archive.org' => 'http://archive.org/download/FP63Data/FP63Data.zip/htdocs'
 );
-$router_index_extensions = array('htm', 'html');
+// the html extension is first for legacy reasons
+$router_index_extensions = array('html', 'htm');
 $router_script_extensions = array('php', 'php5', 'phtml');
 $router_extension_mimetypes = array(
 	'htm' => 'text/html',
