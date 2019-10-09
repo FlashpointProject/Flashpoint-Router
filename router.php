@@ -55,6 +55,7 @@ $router_extension_mimetypes = array(
 	'xap' => 'application/x-silverlight-app'
 );
 
+ignore_user_abort(true);
 set_time_limit(0);
 
 // this is the stream where errors will be output
