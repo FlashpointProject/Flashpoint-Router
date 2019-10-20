@@ -54,6 +54,7 @@ $router_extension_mimetypes = array(
 	'unity3d' => 'application/vnd.unity',
 	'xap' => 'application/x-silverlight-app'
 );
+$router_url_escape_characters = array(':', '/', '?', '&', '=', '#');
 
 ignore_user_abort(true);
 set_time_limit(0);
@@ -397,10 +398,19 @@ function router_serve_file_from_htdocs($pathname_htdocs, $pathname_search_hash, 
 
 // get a file pointer resource (which can be read) from a URL
 function router_create_file_pointer_resource_from_url($url) {
+	global $router_url_escape_characters;
+	
 	router_error(ROUTER_TAB . 'Creating File Pointer Resource From URL: ' . $url);
 	
-	// why was this actually here, for real?
-	$url = str_ireplace('%3A', ':', str_ireplace('%2F', '/', rawurlencode($url)));
+	// this makes URLs with special characters in them acceptable to the Infinity servers
+	$url = rawurlencode($url);
+	
+	// but some characters, such as : or /, need exceptions so the URL is still valid
+	$router_url_escape_characters_count = count($router_url_escape_characters);
+	
+	for ($i = 0; $i < $router_url_escape_characters_count; $i++) {
+		$url = str_ireplace(rawurlencode($router_url_escape_characters[$i]), $router_url_escape_characters[$i], $url);
+	}
 	
 	// I would say data is a terrible variable name
 	// but at least davidar's router worked the first time
