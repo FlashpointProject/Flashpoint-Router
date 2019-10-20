@@ -400,7 +400,7 @@ function router_create_file_pointer_resource_from_url($url) {
 	router_error(ROUTER_TAB . 'Creating File Pointer Resource From URL: ' . $url);
 	
 	// why was this actually here, for real?
-	//$url = str_ireplace('%3A', ':', str_ireplace('%2F', '/', rawurlencode($url)));
+	$url = str_ireplace('%3A', ':', str_ireplace('%2F', '/', rawurlencode($url)));
 	
 	// I would say data is a terrible variable name
 	// but at least davidar's router worked the first time
