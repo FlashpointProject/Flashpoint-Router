@@ -253,12 +253,10 @@ function router_send_file_headers($file_headers) {
 }
 
 // serve a file from cgi-bin as a script
-function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_search_hash, $pathname_trailing_slash, $index_extension_cgi_bin = -1) {
-	global $router_index_extensions;
-	
+function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_search_hash, $pathname_trailing_slash, $index_script_extensions = array(), $index_script_extension_cgi_bin = -1) {
 	router_error('Serving File From CGI-BIN: ' . $pathname_cgi_bin);
 	
-	if ($index_extension_cgi_bin >= count($router_index_extensions)) {
+	if ($index_script_extension_cgi_bin >= count($index_script_extensions)) {
 		return false;
 	}
 	
@@ -279,10 +277,10 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 	}
 	
 	// redirect if we're going to an index.htm/.html file
-	if ($index_extension_cgi_bin !== -1 && $pathname_trailing_slash === '/') {
+	if ($index_script_extension_cgi_bin !== -1 && $pathname_trailing_slash === '/') {
 		$file_headers = array(
 			$_SERVER['SERVER_PROTOCOL'] . ' 301 Moved Permanently',
-			'Location: ' . $_SERVER['SCRIPT_NAME'] . '/index.' . $router_index_extensions[$index_extension_cgi_bin] . $pathname_search_hash
+			'Location: ' . $_SERVER['SCRIPT_NAME'] . '/index.' . $index_script_extensions[$index_script_extension_cgi_bin] . $pathname_search_hash
 		);
 		router_send_file_headers($file_headers);
 		return true;
@@ -1000,16 +998,17 @@ function router_route_pathname($pathname) {
 		} else {
 			// also check directories for index files
 			if (@is_dir($pathname_cgi_bin) === true) {
-				$router_index_extensions_count = count($router_index_extensions);
-				$index_extension_cgi_bin = -1;
+				$index_script_extensions = array_merge($router_index_extensions, $router_script_extensions);
+				$index_script_extensions_count = count($index_script_extensions);
+				$index_script_extension_cgi_bin = -1;
 
-				for ($i = 0; $i < $router_index_extensions_count; $i++) {
-					$pathname_cgi_bin_index = $pathname_cgi_bin . '/index.' . $router_index_extensions[$i];
+				for ($i = 0; $i < $index_script_extensions_count; $i++) {
+					$pathname_cgi_bin_index = $pathname_cgi_bin . '/index.' . $index_script_extensions[$i];
 					if (@is_file($pathname_cgi_bin_index) === true) {
 						//$pathname_cgi_bin = $pathname_cgi_bin_index;
 						$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
-						$index_extension_cgi_bin = $i;
-						return router_serve_file_from_cgi_bin($pathname_cgi_bin_index, $pathname_cgi_bin_info, $pathname_search_hash, $pathname_trailing_slash, $index_extension_cgi_bin);
+						$index_script_extension_cgi_bin = $i;
+						return router_serve_file_from_cgi_bin($pathname_cgi_bin_index, $pathname_cgi_bin_info, $pathname_search_hash, $pathname_trailing_slash, $index_script_extensions, $index_script_extension_cgi_bin);
 					}
 				}
 			}
