@@ -78,6 +78,32 @@ function router_get_http_date($timestamp = null) {
 	return gmdate('D, d M Y H:i:s', $timestamp) . ' GMT';
 }
 
+// gets a pathname that may be reliably compared to another pathname
+function router_get_pathname_comparable($pathname) {
+	$pathname_comparable = @realpath($pathname);
+	
+	if ($pathname_comparable === false) {
+		return false;
+	}
+	
+	return strtolower($pathname_comparable);
+}
+
+// compares if one pathname has another pathname
+function router_has_pathname_comparable($pathname_top, $pathname) {
+	$pathname_top_comparable = router_get_pathname_comparable($pathname_top);
+	$pathname_comparable = router_get_pathname_comparable($pathname);
+	
+	if ($pathname_top_comparable === false || $pathname_comparable === false) {
+		return false;
+	}
+	
+	if (strpos($pathname_comparable, $pathname_top_comparable) !== 0 || $pathname_top_comparable === $pathname_comparable) {
+		return false;
+	}
+	return true;
+}
+
 // this will check if any extension in basename $pathname_info_basename
 // matches any extension in array $extensions, case-insensitively
 
@@ -700,11 +726,24 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 		}
 		
 		// if the file is empty, delete it
-		if ($file_contents_length === 0) {
+		if ($file_contents_length === 0 && $pathname_htdocs_index !== false) {
 			if (@unlink($pathname_htdocs_index) === false) {
 				router_output(ROUTER_TAB . 'Failed to Unlink File');
 				return $file_contents_length;
 			}
+		}
+	}
+	
+	// if the parent directory exists and is empty, remove it
+	// this prevents router leaving empty directories in htdocs
+	if ($file_contents_length === 0 && $pathname_htdocs_index !== false) {
+		// get the comparable pathname of the file's parent directory
+		$dirname_htdocs_index_comparable = router_get_pathname_comparable(dirname($pathname_htdocs_index));
+		
+		// while the pathname of the directory is within htdocs, remove the directory, then get the pathname of the parent directory
+		// rmdir only removes empty directories
+		while ($dirname_htdocs_index_comparable !== false && router_has_pathname_comparable(ROUTER_HTDOCS, $dirname_htdocs_index_comparable) === true && @is_dir($dirname_htdocs_index_comparable) === true && @rmdir($dirname_htdocs_index_comparable) === true) {
+			$dirname_htdocs_index_comparable = router_get_pathname_comparable(dirname($dirname_htdocs_index_comparable));
 		}
 	}
 	return $file_contents_length;
