@@ -204,10 +204,12 @@ function router_write_file($file_pointer_resource, $pathname, $wrote_file) {
 			return false;
 		}
 		
-		if (@unlink($pathname) === false) {
-			router_output(ROUTER_TAB . 'Failed to Unlink File');
-			// error, caller does not continue
-			return false;
+		if ($pathname !== false) {
+			if (@unlink($pathname) === false) {
+				router_output(ROUTER_TAB . 'Failed to Unlink File');
+				// error, caller does not continue
+				return false;
+			}
 		}
 		// no error, caller continues
 		return true;
