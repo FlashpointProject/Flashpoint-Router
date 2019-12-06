@@ -959,6 +959,7 @@ function router_route_pathname_from_htdocs($pathname_htdocs, $pathname_search_ha
 
 			for ($i = 0; $i < $router_index_extensions_count; $i++) {
 				$pathname_htdocs_index = $pathname_htdocs . '/index.' . $router_index_extensions[$i];
+				
 				if (@is_file($pathname_htdocs_index) === true) {
 					// let's pretend this never happened if we can't actually serve the file
 					//$pathname_htdocs = $pathname_htdocs_index;
@@ -1020,6 +1021,7 @@ function router_route_pathname($pathname) {
 		$pathname_cgi_bin = ROUTER_CGI_BIN . $pathname;
 		$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
 		$pathname_cgi_bin_index = '';
+		$pathname_cgi_bin_info_index = array();
 		
 		// if the file being downloaded is a script, include it instead
 		if (router_compare_extensions($pathname_info_basename, $router_script_extensions) === true) {
@@ -1045,11 +1047,13 @@ function router_route_pathname($pathname) {
 
 				for ($i = 0; $i < $index_script_extensions_count; $i++) {
 					$pathname_cgi_bin_index = $pathname_cgi_bin . '/index.' . $index_script_extensions[$i];
+					$pathname_cgi_bin_info_index = pathinfo($pathname_cgi_bin_index);
+					
 					if (@is_file($pathname_cgi_bin_index) === true) {
 						//$pathname_cgi_bin = $pathname_cgi_bin_index;
 						$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
 						$index_script_extension_cgi_bin = $i;
-						return router_serve_file_from_cgi_bin($pathname_cgi_bin_index, $pathname_cgi_bin_info, $pathname_search_hash, $pathname_trailing_slash, $index_script_extensions, $index_script_extension_cgi_bin);
+						return router_serve_file_from_cgi_bin($pathname_cgi_bin_index, $pathname_cgi_bin_info_index, $pathname_search_hash, $pathname_trailing_slash, $index_script_extensions, $index_script_extension_cgi_bin);
 					}
 				}
 			}
