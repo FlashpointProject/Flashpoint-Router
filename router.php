@@ -85,7 +85,6 @@ function router_get_pathname_comparable($pathname) {
 	if ($pathname_comparable === false) {
 		return false;
 	}
-	
 	return strtolower($pathname_comparable);
 }
 
@@ -1031,7 +1030,6 @@ function router_route_pathname($pathname) {
 				router_output('Not A File From CGI-BIN: ' . $pathname_cgi_bin);
 				return false;
 			}
-			
 			return router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_info, $pathname_search_hash, $pathname_trailing_slash);
 		}
 
