@@ -338,7 +338,7 @@ function router_serve_file_from_cgi_bin($pathname_cgi_bin, $pathname_cgi_bin_inf
 }
 
 // serve a local file from htdocs
-function router_serve_file_from_htdocs($pathname_htdocs, $pathname_search_hash, $pathname_trailing_slash, $pathname_info_basename, $index_extension_htdocs = -1) {
+function router_serve_file_from_htdocs($pathname_htdocs, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs_info_basename, $index_extension_htdocs = -1) {
 	global $router_index_extensions;
 	
 	router_output('Serving File From HTDOCS: ' . $pathname_htdocs);
@@ -382,7 +382,7 @@ function router_serve_file_from_htdocs($pathname_htdocs, $pathname_search_hash, 
 	}
 	
 	// determine the mimetype of the local file based on its extension
-	$header_mimetype = router_get_mimetype($pathname_info_basename);
+	$header_mimetype = router_get_mimetype($pathname_htdocs_info_basename);
 	
 	// we have to make up all the headers to send since we're serving this from a local file
 	$file_headers = array(
@@ -751,7 +751,7 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 }
 
 // all your base are belong to us
-function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pathname_trailing_slash, $pathname_info_basename, $pathname_no_extension, $pathname_htdocs, $index_extension = -1) {
+function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pathname_trailing_slash, $pathname_no_extension, $pathname_htdocs, $index_extension = -1) {
 	global $router_index_extensions;
 	global $router_base_urls;
 	
@@ -764,15 +764,19 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 		return false;
 	}
 
-	$pathname_index = $pathname . $pathname_search_hash;
+	$pathname_index = $pathname;
 	
 	if ($index_extension >= count($router_index_extensions)) {
 		return false;
 	}
 	
 	if ($index_extension !== -1) {
-		$pathname_index = $pathname . $pathname_trailing_slash . 'index.' . $router_index_extensions[$index_extension] . $pathname_search_hash;
+		$pathname_index = $pathname . $pathname_trailing_slash . 'index.' . $router_index_extensions[$index_extension];
 	}
+	
+	$pathname_info_index = pathinfo($pathname_index);
+	$pathname_info_basename_index = $pathname_info_index['basename'];
+	$pathname_index_search_hash = $pathname_index . $pathname_search_hash;
 	
 	// the point of this next section is mainly to obtain four important pieces of information
 	// - the file status code - so we know if it exists
@@ -800,7 +804,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 	// (at which point which extension we're currently attempting is defined by $index_extensions)
 	foreach ($router_base_urls as $base => $url) {
 		router_output(ROUTER_TAB . 'Using Base: ' . $base);
-		$file_pointer_resource = router_create_file_pointer_resource_from_url($url . $pathname_index);
+		$file_pointer_resource = router_create_file_pointer_resource_from_url($url . $pathname_index_search_hash);
 
 		if ($file_pointer_resource !== false) {
 			// sometimes there is a 301 Redirect, in which case two headers are found this way
@@ -873,7 +877,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 									break;
 									case 'content-type':
 									// replace the mimetype if we know a different one for this file extension
-									$file_header = 'Content-Type: ' . router_get_mimetype($pathname_info_basename, $file_header_matches[2]);
+									$file_header = 'Content-Type: ' . router_get_mimetype($pathname_info_basename_index, $file_header_matches[2]);
 								}
 								
 								// we'll put through the header to the game
@@ -916,7 +920,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 		// no? well, if the file has no extension, maybe it's actually a directory containing an index.htm/.html file
 		// so try that next
 		if ($pathname_no_extension === true) {
-			if (router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pathname_trailing_slash, $pathname_info_basename, $pathname_no_extension, $pathname_htdocs, $index_extension + 1) === true) {
+			if (router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pathname_trailing_slash, $pathname_no_extension, $pathname_htdocs, $index_extension + 1) === true) {
 				// that was it? good
 				return true;
 			}
@@ -958,12 +962,14 @@ function router_route_pathname_from_htdocs($pathname_htdocs, $pathname_search_ha
 
 			for ($i = 0; $i < $router_index_extensions_count; $i++) {
 				$pathname_htdocs_index = $pathname_htdocs . '/index.' . $router_index_extensions[$i];
+				$pathname_htdocs_info_index = pathinfo($pathname_htdocs_index);
+				$pathname_htdocs_info_basename_index = $pathname_htdocs_info_index['basename'];
 				
 				if (@is_file($pathname_htdocs_index) === true) {
 					// let's pretend this never happened if we can't actually serve the file
 					//$pathname_htdocs = $pathname_htdocs_index;
 					$index_extension_htdocs = $i;
-					$filesize = router_serve_file_from_htdocs($pathname_htdocs_index, $pathname_search_hash, $pathname_trailing_slash, $pathname_info_basename, $index_extension_htdocs);
+					$filesize = router_serve_file_from_htdocs($pathname_htdocs_index, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs_info_basename_index, $index_extension_htdocs);
 					
 					/*
 					if ($filesize === false) {
@@ -1048,8 +1054,6 @@ function router_route_pathname($pathname) {
 					$pathname_cgi_bin_info_index = pathinfo($pathname_cgi_bin_index);
 					
 					if (@is_file($pathname_cgi_bin_index) === true) {
-						//$pathname_cgi_bin = $pathname_cgi_bin_index;
-						$pathname_cgi_bin_info = pathinfo($pathname_cgi_bin);
 						$index_script_extension_cgi_bin = $i;
 						return router_serve_file_from_cgi_bin($pathname_cgi_bin_index, $pathname_cgi_bin_info_index, $pathname_search_hash, $pathname_trailing_slash, $index_script_extensions, $index_script_extension_cgi_bin);
 					}
@@ -1072,7 +1076,7 @@ function router_route_pathname($pathname) {
 
 	// TAKE A SPIN NOW YOU'RE IN WITH THE TECHNO SET
 	// WE'RE GOING SURFING ON THE INTERNET
-	if (router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pathname_trailing_slash, $pathname_info_basename, $pathname_no_extension, $pathname_htdocs) === true) {
+	if (router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pathname_trailing_slash, $pathname_no_extension, $pathname_htdocs) === true) {
 		return true;
 	}
 	// we're out of ways to route the file
