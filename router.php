@@ -1090,7 +1090,7 @@ if (ROUTER_MAD4FP === true) {
 }
 
 // start the program...
-if (router_route_pathname('/' . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME']) === false) {
+if (router_route_pathname('/' . strtok($_SERVER['HTTP_HOST'], ':') . $_SERVER['SCRIPT_NAME']) === false) {
 	//router_output(ROUTER_TAB . 'Failed to Route Pathname');
 	// let's send this header explicitly
 	router_send_file_headers(array($_SERVER['SERVER_PROTOCOL'] . ' 404 Not Found'));
