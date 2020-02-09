@@ -35,6 +35,7 @@ $router_extension_mimetypes = array(
 	'html' => 'text/html',
 	'css' => 'text/css',
 	'js' => 'text/javascript',
+	'xml' => 'application/xml',
 	'swf' => 'application/x-shockwave-flash',
 	'dir' => 'application/x-director',
 	'dxr' => 'application/x-director',
