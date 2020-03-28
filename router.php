@@ -498,7 +498,8 @@ function router_send_downloaded_file_headers($file_headers, $file_location, $fil
 	}
 	
 	// otherwise just send the normal 200 OK header
-	router_send_file_headers($file_headers);
+	// edit: this is now done after writing the file
+	//router_send_file_headers($file_headers);
 	// no error, caller continues
 	return true;
 }
@@ -522,6 +523,7 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 	$file_content_length_kb = intval(ceil($file_content_length / ROUTER_KBSIZE));
 	$file_contents = '';
 	$file_contents_length = 0;
+	$sent_file_headers = false;
 	$sent_downloaded_file_headers = false;
 	$read_file = false;
 	$wrote_file = false;
@@ -556,6 +558,20 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 		if ($file_content_length !== -1) {
 			// stream it!
 			if ($file_contents_length !== 0) {
+				// send the downloaded file headers, but only if we have not already
+				if ($sent_downloaded_file_headers === false) {
+					$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_search_hash, $pathname_trailing_slash, $index_extension);
+					
+					if ($sent_downloaded_file_headers === false) {
+						$file_contents_length = 0;
+						return $file_contents_length;
+					} else {
+						if ($sent_downloaded_file_headers === $file_contents_length) {
+							return $file_contents_length;
+						}
+					}
+				}
+				
 				// attempt to write the file BEFORE headers
 				// if it fails, at least we didn't send bad headers
 				if ($file_pointer_resource_htdocs_index !== false) {
@@ -571,18 +587,9 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 					}
 				}
 				
-				// send the headers, but only if we have not already
-				if ($sent_downloaded_file_headers === false) {
-					$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_search_hash, $pathname_trailing_slash, $index_extension);
-					
-					if ($sent_downloaded_file_headers === false) {
-						$file_contents_length = 0;
-						return $file_contents_length;
-					} else {
-						if ($sent_downloaded_file_headers === $file_contents_length) {
-							return $file_contents_length;
-						}
-					}
+				if ($sent_file_headers === false) {
+					router_send_file_headers($file_headers);
+					$sent_file_headers = true;
 				}
 				
 				echo($read_file);
@@ -628,6 +635,19 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 		router_output(ROUTER_TAB . 'Downloaded 100% of ' . $file_content_length_kb . ' KB');
 		array_push($file_headers, 'Content-Length: ' . $file_contents_length);
 		
+		if ($sent_downloaded_file_headers === false) {
+			$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_search_hash, $pathname_trailing_slash, $index_extension);
+			
+			if ($sent_downloaded_file_headers === false) {
+				$file_contents_length = 0;
+				return $file_contents_length;
+			} else {
+				if ($sent_downloaded_file_headers === $file_contents_length) {
+					return $file_contents_length;
+				}
+			}
+		}
+		
 		// attempt to write the file BEFORE headers
 		// if it fails, at least we didn't send bad headers
 		if ($file_pointer_resource_htdocs_index !== false) {
@@ -643,17 +663,9 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 			}
 		}
 		
-		if ($sent_downloaded_file_headers === false) {
-			$sent_downloaded_file_headers = router_send_downloaded_file_headers($file_headers, $file_location, $file_contents_length, $pathname_search_hash, $pathname_trailing_slash, $index_extension);
-			
-			if ($sent_downloaded_file_headers === false) {
-				$file_contents_length = 0;
-				return $file_contents_length;
-			} else {
-				if ($sent_downloaded_file_headers === $file_contents_length) {
-					return $file_contents_length;
-				}
-			}
+		if ($sent_file_headers === false) {
+			router_send_file_headers($file_headers);
+			$sent_file_headers = true;
 		}
 		
 		echo($file_contents);
