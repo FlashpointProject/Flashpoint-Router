@@ -53,7 +53,10 @@ $router_extension_mimetypes = array(
 	'nmo' => 'application/x-virtools',
 	'nms' => 'application/x-virtools',
 	'unity3d' => 'application/vnd.unity',
-	'xap' => 'application/x-silverlight-app'
+	'xap' => 'application/x-silverlight-app',
+	'vrt' => 'x-world/x-vrt',
+    'svr' => 'x-world/x-svr',
+    'xvr' => 'x-world/x-xvr'
 );
 $router_url_reserved_characters = array(';', '/', '?', ':', '@', '=', '&');
 
