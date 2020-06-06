@@ -1077,17 +1077,23 @@ function router_route_pathname($pathname) {
 			}
 		}
 	}
+
+	$pathname_htdocs_content = ROUTER_HTDOCS . '/content' . $pathname;
+	$pathname_htdocs = ROUTER_HTDOCS . $pathname;
 	
 	if (ROUTER_ROUTE_PATHNAMES_FROM_HTDOCS_CONTENT === true) {
-		if (router_route_pathname_from_htdocs(ROUTER_HTDOCS . '/content' . $pathname, $pathname_search_hash, $pathname_trailing_slash, $pathname_info_basename) === true) {
+		if (router_route_pathname_from_htdocs($pathname_htdocs_content, $pathname_search_hash, $pathname_trailing_slash, $pathname_info_basename) === true) {
 			return true;
 		}
 	}
-
-	$pathname_htdocs = ROUTER_HTDOCS . $pathname;
 	
 	if (router_route_pathname_from_htdocs($pathname_htdocs, $pathname_search_hash, $pathname_trailing_slash, $pathname_info_basename) === true) {
 		return true;
+	}
+	
+	if (ROUTER_MAD4FP === true && ROUTER_ROUTE_PATHNAMES_FROM_HTDOCS_CONTENT === true) {
+		// MAD4FP files should go to curation testing folder
+		$pathname_htdocs = $pathname_htdocs_content;
 	}
 
 	// TAKE A SPIN NOW YOU'RE IN WITH THE TECHNO SET
