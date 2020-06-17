@@ -1,5 +1,4 @@
 <?php
-// php -S 127.0.0.1:22500 router.php
 // to ensure Redirector compatibility, please set display_errors to Off in php.ini
 
 // constants
@@ -75,6 +74,7 @@ function router_get_base_urls() {
 	$base_urls_file = @file(dirname(__FILE__) . '\router_base_urls.txt');
 
 	if ($base_urls_file === false) {
+		router_output('Failed to Get Base URLs File');
 		return $base_urls;
 	}
 	
