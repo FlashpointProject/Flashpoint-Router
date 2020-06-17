@@ -12,7 +12,7 @@ const ROUTER_ROUTE_PATHNAMES_FROM_HTDOCS_CONTENT = true;
 const ROUTER_ALLOW_CROSSDOMAIN = true;
 const ROUTER_MKDIR_MODE = 0755;
 const ROUTER_FILE_HEADER_STATUS_PATTERN = '/http\s*\/\s*\d+\s*\.\s*\d+\s+(\d+)/i';
-const ROUTER_FILE_HEADER_PATTERN = '/([^:\s]+)[^:\S]*:\s*(\S+)/i';
+const ROUTER_FILE_HEADER_PATTERN = '/^[^:\S]*([^:\s]+)[^:\S]*:\s*(\S+(?:\s+\S+)*)\s*$/i';
 const ROUTER_FILE_READ_LENGTH = 8192;
 const ROUTER_RETRY_SLEEP = 10000;
 const ROUTER_KBSIZE = 1024;
@@ -20,13 +20,7 @@ const ROUTER_WARN_PERCENTAGE = 50;
 const ROUTER_TAB = "\t";
 const ROUTER_NEWLINE = "\n";
 
-// TODO: make user able to set this in launcher options!
-$router_base_urls = array(
-	'Dri0m' => 'https://unstable.life/Flashpoint/Server/htdocs',
-	'BlueMaxima' => 'http://bluemaxima.org/htdocs',
-	// be sure to change this URL for every new version release!
-	'Archive.org' => 'http://archive.org/download/FP63Data/FP63Data.zip/htdocs'
-);
+$router_base_urls = false;
 // the html extension is first for legacy reasons
 $router_index_extensions = array('html', 'htm');
 $router_script_extensions = array('php', 'php5', 'phtml');
@@ -72,6 +66,30 @@ function router_output($message) {
 	if ($router_file_pointer_resource_stdout !== false) {
 		@fwrite($router_file_pointer_resource_stdout, $message . ROUTER_NEWLINE);
 	}
+}
+
+function router_get_base_urls() {
+	// open file in same directory
+	// we don't use flags to trim newline characters because PHP 4 doesn't support it
+	$base_urls = false;
+	$base_urls_file = @file(dirname(__FILE__) . '\router_base_urls.txt');
+
+	if ($base_urls_file === false) {
+		return $base_urls;
+	}
+	
+	$base_urls = array();
+	
+	foreach ($base_urls_file as $base_url) {
+		// we trim the newlines off the end, then read this as a space delimited associative array
+		// the array union is in case the delimiter is missing
+		list($base, $url) = explode(' ', rtrim($base_url, '\r\n'), 2) + array(null, null);
+
+		if ($base !== null && $url !== null) {
+			$base_urls[$base] = $url;
+		}
+	}
+	return $base_urls;
 }
 
 // get the date specified (or if unspecified, the current date) in HTTP-Date format (RFC1123)
@@ -678,7 +696,7 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 }
 
 // download the file (it's pretty self explanatory dude)
-function router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs, $index_extension = 1) {
+function router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $file_last_modified, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs, $index_extension = 1) {
 	global $router_index_extensions;
 	
 	router_output(ROUTER_TAB . 'Downloading File To: ' . $pathname_htdocs);
@@ -742,11 +760,21 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 			return $file_contents_length;
 		}
 		
-		// if the file is empty, delete it
-		if ($file_contents_length === 0 && $pathname_htdocs_index !== false) {
-			if (@unlink($pathname_htdocs_index) === false) {
-				router_output(ROUTER_TAB . 'Failed to Unlink File');
-				return $file_contents_length;
+		if ($pathname_htdocs_index !== false) {
+			if ($file_last_modified !== false) {
+				if (touch($pathname_htdocs_index, $file_last_modified) === false) {
+					router_output(ROUTER_TAB . 'Failed to Touch File');
+					$file_contents_length = 0;
+					return $file_contents_length;
+				}
+			}
+			
+			// if the file is empty, delete it
+			if ($file_contents_length === 0) {
+				if (@unlink($pathname_htdocs_index) === false) {
+					router_output(ROUTER_TAB . 'Failed to Unlink File');
+					return $file_contents_length;
+				}
 			}
 		}
 	}
@@ -793,6 +821,10 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 	$pathname_info_index = pathinfo($pathname_index);
 	$pathname_info_basename_index = $pathname_info_index['basename'];
 	$pathname_index_search_hash = $pathname_index . $pathname_search_hash;
+	
+	if ($router_base_urls === false) {
+		return false;
+	}
 	
 	// the point of this next section is mainly to obtain four important pieces of information
 	// - the file status code - so we know if it exists
@@ -889,7 +921,13 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 									$file_content_length = intval($file_header_matches[2]);
 									break;
 									case 'last-modified':
-									$file_last_modified = true;
+									$file_last_modified = @strtotime($file_header_matches[2]);
+									
+									if (version_compare(PHP_VERSION, '5.1.0', '<') === true) {
+										if ($file_last_modified === -1) {
+											$file_last_modified = false;
+										}
+									}
 									break;
 									case 'content-type':
 									// replace the mimetype if we know a different one for this file extension
@@ -911,7 +949,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 				}
 				
 				// we attempt to download the file
-				$file_contents_length = router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs, $index_extension);
+				$file_contents_length = router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $file_last_modified, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs, $index_extension);
 				
 				// and if we get a file with an actual length back, we can finally end this loop
 				if ($file_contents_length !== 0) {
@@ -919,7 +957,6 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 						router_output(ROUTER_TAB . 'Failed to Destroy File Pointer Resource From URL');
 						return false;
 					}
-					
 					break;
 				}
 			}
@@ -1109,6 +1146,8 @@ function router_route_pathname($pathname) {
 // the Launcher should not change this!!
 if (ROUTER_MAD4FP === true) {
 	$router_base_urls = array('MAD4FP' => 'http:/');
+} else {
+	$router_base_urls = router_get_base_urls();
 }
 
 // start the program...

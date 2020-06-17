@@ -1,0 +1,3 @@
+Dri0m https://unstable.life/Flashpoint/Server/htdocs
+BlueMaxima http://bluemaxima.org/htdocs
+Archive.org http://archive.org/download/FP80Data/FP80Data.zip/htdocs
