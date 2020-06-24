@@ -83,7 +83,7 @@ function router_get_base_urls() {
 	foreach ($base_urls_file as $base_url) {
 		// we trim the newlines off the end, then read this as a space delimited associative array
 		// the array union is in case the delimiter is missing
-		list($base, $url) = explode(' ', rtrim($base_url, '\r\n'), 2) + array(null, null);
+		list($base, $url) = explode(' ', rtrim($base_url, "\r\n"), 2) + array(null, null);
 
 		if ($base !== null && $url !== null) {
 			$base_urls[$base] = $url;
