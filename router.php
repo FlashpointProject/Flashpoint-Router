@@ -53,7 +53,7 @@ $router_extension_mimetypes = array(
     'xvr' => 'x-world/x-xvr',
 	'pwc' => 'application/x-pulse-player',
     'pwn' => 'application/x-pulse-download',
-    'pw3' => 'application/x-pulse-player',
+    'pw3' => 'application/x-pulse-player-32',
     'pws' => 'application/x-pulse-stream'
 );
 // URL Reserved Characters (RFC1738)
