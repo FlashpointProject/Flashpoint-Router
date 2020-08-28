@@ -48,6 +48,7 @@ $router_extension_mimetypes = array(
 	'nms' => 'application/x-virtools',
 	'unity3d' => 'application/vnd.unity',
 	'xap' => 'application/x-silverlight-app',
+	'wrl' => 'model/vrml',
 	'vrt' => 'x-world/x-vrt',
     'svr' => 'x-world/x-svr',
     'xvr' => 'x-world/x-xvr',
