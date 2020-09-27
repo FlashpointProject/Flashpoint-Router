@@ -78,7 +78,7 @@ function router_get_base_urls() {
 	// open file in same directory
 	// we don't use flags to trim newline characters because PHP 4 doesn't support it
 	$base_urls = false;
-	$base_urls_file = @file(dirname(__FILE__) . '\router_base_urls.txt');
+	$base_urls_file = @file(dirname(__FILE__) . DIRECTORY_SEPARATOR . 'router_base_urls.txt');
 
 	if ($base_urls_file === false) {
 		router_output('Failed to Get Base URLs File');
@@ -1060,6 +1060,7 @@ function router_route_pathname($pathname) {
 	
 	//router_output('Routing Pathname: ' . $pathname);
 	
+	$pathname = '/' . $pathname;
 	$pathname_search_hash = '';
 	
 	if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true) {
@@ -1164,7 +1165,7 @@ if (ROUTER_MAD4FP === true) {
 }
 
 // start the program...
-if (router_route_pathname('/' . strtok($_SERVER['HTTP_HOST'], ':') . $_SERVER['SCRIPT_NAME']) === false) {
+if (router_route_pathname(strtok($_SERVER['HTTP_HOST'], ':') . $_SERVER['SCRIPT_NAME']) === false) {
 	//router_output(ROUTER_TAB . 'Failed to Route Pathname');
 	// let's send this header explicitly
 	router_send_file_headers(array($_SERVER['SERVER_PROTOCOL'] . ' 404 Not Found'));
