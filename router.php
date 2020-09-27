@@ -50,12 +50,12 @@ $router_extension_mimetypes = array(
 	'xap' => 'application/x-silverlight-app',
 	'wrl' => 'model/vrml',
 	'vrt' => 'x-world/x-vrt',
-    'svr' => 'x-world/x-svr',
-    'xvr' => 'x-world/x-xvr',
+	'svr' => 'x-world/x-svr',
+	'xvr' => 'x-world/x-xvr',
 	'pwc' => 'application/x-pulse-player',
-    'pwn' => 'application/x-pulse-download',
-    'pw3' => 'application/x-pulse-player-32',
-    'pws' => 'application/x-pulse-stream'
+	'pwn' => 'application/x-pulse-download',
+	'pw3' => 'application/x-pulse-player-32',
+	'pws' => 'application/x-pulse-stream'
 );
 // URL Reserved Characters (RFC1738)
 $router_url_reserved_characters = array(';', '/', '?', ':', '@', '=', '&');
