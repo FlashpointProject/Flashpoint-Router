@@ -98,7 +98,7 @@ function router_get_base_urls() {
 		
 		// we trim the newlines off the end, then read this as a space delimited associative array
 		$base_url_matches = array();
-		$base_url_match = preg_match('/^\s*(\S+)\s+(\S+)/', rtrim($base_url, "\r\n"), $base_url_matches);
+		$base_url_match = preg_match('/^\s*(\S+)\s+(\S.*)$/', rtrim($base_url, "\r\n"), $base_url_matches);
 		
 		// ignore lines where the Base URL is invalid
 		if ($base_url_match === true) {
