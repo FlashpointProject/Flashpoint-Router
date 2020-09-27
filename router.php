@@ -10,7 +10,7 @@ const ROUTER_BUILD_HTTP_QUERY = true;
 const ROUTER_ROUTE_PATHNAMES_FROM_HTDOCS_CONTENT = true;
 const ROUTER_ALLOW_CROSSDOMAIN = true;
 const ROUTER_MKDIR_MODE = 0755;
-const ROUTER_FILE_HEADER_STATUS_PATTERN = '/http\s*\/\s*\d+\s*\.\s*\d+\s+(\d+)/i';
+const ROUTER_FILE_HEADER_STATUS_PATTERN = '/^\s*http\s*\/\s*\d+\s*\.\s*\d+\s+(\d+)/i';
 const ROUTER_FILE_HEADER_PATTERN = '/^[^:\S]*([^:\s]+)[^:\S]*:\s*(\S+(?:\s+\S+)*)\s*$/i';
 const ROUTER_FILE_READ_LENGTH = 8192;
 const ROUTER_RETRY_SLEEP = 10000;
@@ -88,12 +88,18 @@ function router_get_base_urls() {
 	$base_urls = array();
 	
 	foreach ($base_urls_file as $base_url) {
+		$base_url_exploded = explode('#', $base_url, 2);
+		
+		if (isset($base_url_exploded[0]) === true) {
+			$base_url = $base_url_exploded[0];
+		}
+		
 		// we trim the newlines off the end, then read this as a space delimited associative array
-		// the array union is in case the delimiter is missing
-		list($base, $url) = explode(' ', rtrim($base_url, "\r\n"), 2) + array(null, null);
-
-		if ($base !== null && $url !== null) {
-			$base_urls[$base] = $url;
+		$base_url_matches = array();
+		$base_url_match = preg_match('/^\s*(\S+)\s+(\S+)/', rtrim($base_url, "\r\n"), $base_url_matches);
+		
+		if ($base_url_match) {
+			$base_urls[$base_url_matches[1]] = $base_url_matches[2];
 		}
 	}
 	return $base_urls;
