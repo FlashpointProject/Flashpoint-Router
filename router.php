@@ -88,6 +88,8 @@ function router_get_base_urls() {
 	$base_urls = array();
 	
 	foreach ($base_urls_file as $base_url) {
+		// comments may be created by using a pound sign
+		// everything after is ignored
 		$base_url_exploded = explode('#', $base_url, 2);
 		
 		if (isset($base_url_exploded[0]) === true) {
@@ -98,7 +100,8 @@ function router_get_base_urls() {
 		$base_url_matches = array();
 		$base_url_match = preg_match('/^\s*(\S+)\s+(\S+)/', rtrim($base_url, "\r\n"), $base_url_matches);
 		
-		if ($base_url_match) {
+		// ignore lines where the Base URL is invalid
+		if ($base_url_match === true) {
 			$base_urls[$base_url_matches[1]] = $base_url_matches[2];
 		}
 	}
