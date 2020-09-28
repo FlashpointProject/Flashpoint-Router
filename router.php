@@ -101,7 +101,7 @@ function router_get_base_urls() {
 		$base_url_match = preg_match('/^\s*(\S+)\s+(\S.*)$/', rtrim($base_url, "\r\n"), $base_url_matches);
 		
 		// ignore lines where the Base URL is invalid
-		if ($base_url_match === true) {
+		if ($base_url_match === 1) {
 			$base_urls[$base_url_matches[1]] = $base_url_matches[2];
 		}
 	}
