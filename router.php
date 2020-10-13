@@ -9,6 +9,7 @@ const ROUTER_CGI_BIN = 'cgi-bin';
 const ROUTER_BUILD_HTTP_QUERY = true;
 const ROUTER_ROUTE_PATHNAMES_FROM_HTDOCS_CONTENT = true;
 const ROUTER_ALLOW_CROSSDOMAIN = true;
+const ROUTER_SSL = false;
 const ROUTER_MKDIR_MODE = 0755;
 const ROUTER_FILE_HEADER_STATUS_PATTERN = '/^\s*http\s*\/\s*\d+\s*\.\s*\d+\s+(\d+)/i';
 const ROUTER_FILE_HEADER_PATTERN = '/^[^:\S]*([^:\s]+)[^:\S]*:\s*(\S+(?:\s+\S+)*)\s*$/i';
@@ -49,6 +50,7 @@ $router_extension_mimetypes = array(
 	'unity3d' => 'application/vnd.unity',
 	'xap' => 'application/x-silverlight-app',
 	'wrl' => 'model/vrml',
+	'cnc' => 'application/x-cnc',
 	'vrt' => 'x-world/x-vrt',
 	'svr' => 'x-world/x-svr',
 	'xvr' => 'x-world/x-xvr',
@@ -475,10 +477,20 @@ function router_create_file_pointer_resource_from_url($url) {
 		$url = str_ireplace(rawurlencode($router_url_reserved_characters[$i]), $router_url_reserved_characters[$i], $url);
 	}
 	
-	// I would say data is a terrible variable name
-	// but at least davidar's router worked the first time
-	// so I can't rightly throw any shade around now can I
-	$file_pointer_resource = @fopen($url, 'rb');
+	// FIXME FIXME FIXME
+	// fix this server side for next release!
+	$file_pointer_resource = false;
+	
+	if (ROUTER_SSL === true || version_compare(PHP_VERSION, '5.0.0', '<') === true) {
+		$file_pointer_resource = @fopen($url, 'rb');
+	} else {
+		$file_pointer_resource = @fopen($url, 'rb', false, stream_context_create(array(
+			'ssl' => array(
+				'verify_peer' => false,
+				'verify_peer_name' => false
+			)
+		)));
+	}
 
 	if ($file_pointer_resource === false) {
 		router_output(ROUTER_TAB . 'Failed to Open File');
