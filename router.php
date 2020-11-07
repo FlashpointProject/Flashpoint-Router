@@ -9,7 +9,7 @@ const ROUTER_CGI_BIN = 'cgi-bin';
 const ROUTER_BUILD_HTTP_QUERY = true;
 const ROUTER_ROUTE_PATHNAMES_FROM_HTDOCS_CONTENT = true;
 const ROUTER_ALLOW_CROSSDOMAIN = true;
-const ROUTER_SSL = false;
+const ROUTER_SSL = true;
 const ROUTER_MKDIR_MODE = 0755;
 const ROUTER_FILE_HEADER_STATUS_PATTERN = '/^\s*http\s*\/\s*\d+\s*\.\s*\d+\s+(\d+)/i';
 const ROUTER_FILE_HEADER_PATTERN = '/^[^:\S]*([^:\s]+)[^:\S]*:\s*(\S+(?:\s+\S+)*)\s*$/i';
@@ -477,8 +477,7 @@ function router_create_file_pointer_resource_from_url($url) {
 		$url = str_ireplace(rawurlencode($router_url_reserved_characters[$i]), $router_url_reserved_characters[$i], $url);
 	}
 	
-	// FIXME FIXME FIXME
-	// fix this server side for next release!
+	// unused now, this has been resolved server side
 	$file_pointer_resource = false;
 	
 	if (ROUTER_SSL === true || version_compare(PHP_VERSION, '5.0.0', '<') === true) {
