@@ -1,3 +1,2 @@
-Dri0m http://infinity.unstable.life/Flashpoint/Server/htdocs
-#Archive.org http://archive.org/download/Flashpoint8.2/Flashpoint%208.2%20Ultimate.7z/Flashpoint%208.2%20Ultimate/Server/htdocs
-Auditorium http://archive.org/download/NewgroundsAuditorium/Newgrounds Auditorium.zip/Data/Games/Flash/htdocs
+Dri0m http://infinity.unstable.life/Flashpoint/Legacy/htdocs
+Archive.org http://archive.org/download/FP90Data/FP90Data.zip/htdocs
