@@ -44,21 +44,21 @@ $router_extension_mimetypes = array(
 	'aam' => 'application/x-authorware-map',
 	'class' => 'application/java',
 	'jar' => 'application/java-archive',
+	'xap' => 'application/x-silverlight-app',
+	'unity3d' => 'application/vnd.unity',
 	'cmo' => 'application/x-virtools',
 	'vmo' => 'application/x-virtools',
 	'nmo' => 'application/x-virtools',
 	'nms' => 'application/x-virtools',
-	'unity3d' => 'application/vnd.unity',
-	'xap' => 'application/x-silverlight-app',
-	'wrl' => 'model/vrml',
 	'cnc' => 'application/x-cnc',
-	'vrt' => 'x-world/x-vrt',
-	'svr' => 'x-world/x-svr',
-	'xvr' => 'x-world/x-xvr',
 	'pwc' => 'application/x-pulse-player',
 	'pwn' => 'application/x-pulse-download',
 	'pw3' => 'application/x-pulse-player-32',
-	'pws' => 'application/x-pulse-stream'
+	'pws' => 'application/x-pulse-stream',
+	'wrl' => 'model/vrml',
+	'vrt' => 'x-world/x-vrt',
+	'svr' => 'x-world/x-svr',
+	'xvr' => 'x-world/x-xvr'
 );
 // URL Reserved Characters (RFC1738)
 $router_url_reserved_characters = array(';', '/', '?', ':', '@', '=', '&');
