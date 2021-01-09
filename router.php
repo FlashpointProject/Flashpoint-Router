@@ -788,7 +788,7 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 	}
 	
 	$file_content_encoding_supported = true;
-	$file_content_encodings = preg_split('/[^\,\S]*\,\s*/', $file_content_encoding, -1, PREG_SPLIT_NO_EMPTY);
+	$file_content_encodings = preg_split('/[^\,\S]*\,\s*/', strtolower($file_content_encoding), -1, PREG_SPLIT_NO_EMPTY);
 	
 	if ($file_content_encodings !== false) {
 		$file_content_encodings_count = count($file_content_encodings);
