@@ -62,7 +62,6 @@ $router_extension_mimetypes = array(
 );
 // URL Reserved Characters (RFC1738)
 $router_url_reserved_characters = array(';', '/', '?', ':', '@', '=', '&');
-$router_compressed_content_encodings = array('gzip', 'compress', 'deflate', 'br');
 
 ignore_user_abort(true);
 set_time_limit(0);
@@ -262,7 +261,6 @@ function router_write_file($file_pointer_resource, $pathname, $wrote_file) {
 // send the specified file headers
 function router_send_file_headers($file_headers) {
 	//router_output(ROUTER_TAB . 'Sending File Headers');
-	global $router_compressed_content_encodings;
 	
 	if (headers_sent() === true) {
 		return;
@@ -300,10 +298,6 @@ function router_send_file_headers($file_headers) {
 			
 			if ($file_header_lower_match === 1) {
 				// this is a valid HTTP header
-				// Warn if we received a compressed response - we can't decompress it
-				if ($file_header_lower_matches[1] === 'content-encoding' && in_array($file_header_lower_matches[2], $router_compressed_content_encodings)) {
-					router_output(ROUTER_TAB . 'Warning: Received compressed response from server. Downloaded file will be unusable.');
-				}
 				// disallow closed connections because this causes a Redirector bug
 				// also disallow the application/octet-stream mimetype
 				// and Flash dislikes Content-Disposition
@@ -1129,7 +1123,7 @@ function router_route_pathname($pathname) {
 	$pathname = '/' . $pathname;
 	$pathname_search_hash = '';
 	
-	if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true) {
+	if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true && $_SERVER['REQUEST_METHOD'] === 'GET') {
 		// $_SERVER['QUERY_STRING'] does not work in this environment
 		$pathname_search_hash = http_build_query($_GET);
 		
