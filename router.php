@@ -1129,7 +1129,7 @@ function router_route_pathname($pathname) {
 	$pathname = '/' . $pathname;
 	$pathname_search_hash = '';
 	
-	if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true && $_SERVER['REQUEST_METHOD'] === 'GET') {
+	if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true) {
 		// $_SERVER['QUERY_STRING'] does not work in this environment
 		$pathname_search_hash = http_build_query($_GET);
 		
