@@ -18,6 +18,7 @@ const ROUTER_RETRY_SLEEP = 10000;
 const ROUTER_KBSIZE = 1024;
 const ROUTER_WARN_PERCENTAGE = 50;
 const ROUTER_TAB = "\t";
+const ROUTER_RETURN = "\r";
 const ROUTER_NEWLINE = "\n";
 
 $router_base_urls = false;
@@ -101,7 +102,7 @@ function router_get_base_urls() {
 		
 		// we trim the newlines off the end, then read this as a space delimited associative array
 		$base_url_matches = array();
-		$base_url_match = preg_match('/^\s*(\S+)\s+(\S.*)$/', rtrim($base_url, "\r\n"), $base_url_matches);
+		$base_url_match = preg_match('/^\s*(\S+)\s+(\S.*)$/', rtrim($base_url, ROUTER_RETURN . ROUTER_NEWLINE), $base_url_matches);
 		
 		// ignore lines where the Base URL is invalid
 		if ($base_url_match === 1) {
@@ -486,15 +487,35 @@ function router_create_file_pointer_resource_from_url($url) {
 	// unused now, this has been resolved server side
 	$file_pointer_resource = false;
 	
-	if (ROUTER_SSL === true || version_compare(PHP_VERSION, '5.0.0', '<') === true) {
+	if (version_compare(PHP_VERSION, '5.0.0', '<') === true) {
+		// fopen does not support contexts in this PHP version
 		$file_pointer_resource = @fopen($url, 'rb');
 	} else {
-		$file_pointer_resource = @fopen($url, 'rb', false, stream_context_create(array(
-			'ssl' => array(
+		// request that the response be in a supported encoding
+		$options = array(
+			'http' => array(
+				'header' => 'Accept-Encoding: identity' . ROUTER_RETURN . ROUTER_NEWLINE
+			)
+		);
+		
+		if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true) {
+			// forward POST requests
+			$options['http']['method'] = $_SERVER['REQUEST_METHOD'];
+			
+			if ($options['http']['method'] === 'POST') {
+				$options['http']['header'] .= 'Content-Type: ' . isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : 'application/x-www-form-urlencoded' . ROUTER_RETURN . ROUTER_NEWLINE;
+				$options['http']['content'] = http_build_query($_POST);
+			}
+		}
+		
+		if (ROUTER_SSL !== true) {
+			$options['ssl'] = array(
 				'verify_peer' => false,
 				'verify_peer_name' => false
-			)
-		)));
+			);
+		}
+		
+		$file_pointer_resource = @fopen($url, 'rb', false, stream_context_create($options));
 	}
 
 	if ($file_pointer_resource === false) {
@@ -729,7 +750,7 @@ function router_download_file_htdocs($file_pointer_resource, $file_headers, $fil
 }
 
 // download the file (it's pretty self explanatory dude)
-function router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $file_last_modified, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs, $index_extension = 1) {
+function router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $file_last_modified, $file_content_encoding, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs, $index_extension = 1) {
 	global $router_index_extensions;
 	
 	router_output(ROUTER_TAB . 'Downloading File To: ' . $pathname_htdocs);
@@ -772,12 +793,32 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 		}
 	}
 	
+	$file_content_encoding_supported = true;
+	$file_content_encodings = preg_split('/[^\,\S]*\,\s*/', $file_content_encoding, -1, PREG_SPLIT_NO_EMPTY);
+	
+	if ($file_content_encodings !== false) {
+		$file_content_encodings_count = count($file_content_encodings);
+		
+		for ($i = 0; $i < $file_content_encodings_count; $i++) {
+			if ($file_content_encodings[$i] !== 'identity') {
+				// if there is any content encoding that is not identity, it is an unsupported encoding
+				$file_content_encoding_supported = false;
+			}
+		}
+	}
+	
 	// if we managed to make the directory, save the file in htdocs if it isn't locked - but don't stop if we error in doing so
 	if ($pathname_htdocs_index !== false) {
-		$file_pointer_resource_htdocs_index = @fopen($pathname_htdocs_index, 'wb');
-		
-		if ($file_pointer_resource_htdocs_index === false) {
-			router_output(ROUTER_TAB . 'File Locked With Only Readers');
+		if (ROUTER_MAD4FP === true || $file_content_encoding_supported === true) {
+			if ($file_content_encoding_supported !== true) {
+				router_output(ROUTER_TAB . 'WARNING: Downloading File With Unsupported Content Encoding (' . $file_content_encoding . ')');
+			}
+			
+			$file_pointer_resource_htdocs_index = @fopen($pathname_htdocs_index, 'wb');
+			
+			if ($file_pointer_resource_htdocs_index === false) {
+				router_output(ROUTER_TAB . 'File Locked With Only Readers');
+			}
 		}
 	} else {
 		router_output(ROUTER_TAB . 'Failed to Make Directory');
@@ -877,6 +918,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 	$file_location = '';
 	$file_content_length = -1;
 	$file_last_modified = false;
+	$file_content_encoding = 'identity';
 	$file_contents_length = 0;
 
 	// we loop through every Base URL
@@ -897,6 +939,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 			$file_location = '';
 			$file_content_length = -1;
 			$file_last_modified = false;
+			$file_content_encoding = 'identity';
 			$file_contents_length = 0;
 
 			if (isset($stream_meta_data) === true && isset($stream_meta_data['wrapper_data']) === true) {
@@ -962,6 +1005,9 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 										}
 									}
 									break;
+									case 'content-encoding':
+									$file_content_encoding = $file_header_matches[2];
+									break;
 									case 'content-type':
 									// replace the mimetype if we know a different one for this file extension
 									$file_header = 'Content-Type: ' . router_get_mimetype($pathname_info_basename_index, $file_header_matches[2]);
@@ -982,7 +1028,7 @@ function router_serve_file_from_base_urls($pathname, $pathname_search_hash, $pat
 				}
 				
 				// we attempt to download the file
-				$file_contents_length = router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $file_last_modified, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs, $index_extension);
+				$file_contents_length = router_download_file($file_pointer_resource, $file_headers, $file_location, $file_content_length, $file_last_modified, $file_content_encoding, $pathname_search_hash, $pathname_trailing_slash, $pathname_htdocs, $index_extension);
 				
 				// and if we get a file with an actual length back, we can finally end this loop
 				if ($file_contents_length !== 0) {
@@ -1083,7 +1129,7 @@ function router_route_pathname($pathname) {
 	$pathname = '/' . $pathname;
 	$pathname_search_hash = '';
 	
-	if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true) {
+	if (ROUTER_MAD4FP === true && ROUTER_BUILD_HTTP_QUERY === true && $_SERVER['REQUEST_METHOD'] === 'GET') {
 		// $_SERVER['QUERY_STRING'] does not work in this environment
 		$pathname_search_hash = http_build_query($_GET);
 		
