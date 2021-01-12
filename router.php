@@ -788,13 +788,13 @@ function router_download_file($file_pointer_resource, $file_headers, $file_locat
 	}
 	
 	$file_content_encoding_supported = true;
-	$file_content_encodings = preg_split('/[^\,\S]*\,\s*/', strtolower($file_content_encoding), -1, PREG_SPLIT_NO_EMPTY);
+	$file_content_encodings_lower = preg_split('/[^\,\S]*\,\s*/i', strtolower($file_content_encoding), -1, PREG_SPLIT_NO_EMPTY);
 	
-	if ($file_content_encodings !== false) {
-		$file_content_encodings_count = count($file_content_encodings);
+	if ($file_content_encodings_lower !== false) {
+		$file_content_encodings_lower_count = count($file_content_encodings_lower);
 		
-		for ($i = 0; $i < $file_content_encodings_count; $i++) {
-			if ($file_content_encodings[$i] !== 'identity') {
+		for ($i = 0; $i < $file_content_encodings_lower_count; $i++) {
+			if ($file_content_encodings_lower[$i] !== 'identity') {
 				// if there is any content encoding that is not identity, it is an unsupported encoding
 				$file_content_encoding_supported = false;
 			}
