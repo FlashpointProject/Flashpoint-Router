@@ -303,6 +303,7 @@ function router_send_file_headers($file_headers) {
 				// also disallow the application/octet-stream mimetype
 				// and Flash dislikes Content-Disposition
 				// we also disallow Date because PHP already is sending it (in the wrong format but w/e)
+				// disallow Report-To (Cloudflare header) because it causes "not a valid Director file" from Shockwave
 				if (($file_header_lower_matches[1] !== 'connection' || $file_header_lower_matches[2] !== 'close')
 				&& ($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream')
 				&& $file_header_lower_matches[1] !== 'content-disposition'
