@@ -30,6 +30,7 @@ $router_extension_mimetypes = array(
 	'html' => 'text/html',
 	'css' => 'text/css',
 	'js' => 'text/javascript',
+	'svg' => 'image/svg+xml',
 	'xml' => 'application/xml',
 	'wasm' => 'application/wasm',
 	'swf' => 'application/x-shockwave-flash',
@@ -302,10 +303,11 @@ function router_send_file_headers($file_headers) {
 				// also disallow the application/octet-stream mimetype
 				// and Flash dislikes Content-Disposition
 				// we also disallow Date because PHP already is sending it (in the wrong format but w/e)
-				if (($file_header_lower_matches[1] !== 'connection' || $file_header_lower_matches[2] !== 'close') &&
-				($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream') &&
-				$file_header_lower_matches[1] !== 'content-disposition' &&
-				$file_header_lower_matches[1] !== 'date') {
+				if (($file_header_lower_matches[1] !== 'connection' || $file_header_lower_matches[2] !== 'close')
+				&& ($file_header_lower_matches[1] !== 'content-type' || $file_header_lower_matches[2] !== 'application/octet-stream')
+				&& $file_header_lower_matches[1] !== 'content-disposition'
+				&& $file_header_lower_matches[1] !== 'date'
+				&& $file_header_lower_matches[1] !== 'report-to') {
 					//router_output(ROUTER_TAB . 'Header Sent: ' . $file_headers[$i]);
 					header($file_headers[$i]);
 				}
