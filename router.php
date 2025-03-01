@@ -30,6 +30,7 @@ $router_extension_mimetypes = array(
 	'html' => 'text/html',
 	'css' => 'text/css',
 	'js' => 'text/javascript',
+	'mjs' => 'text/javascript',
 	'svg' => 'image/svg+xml',
 	'xml' => 'application/xml',
 	'wasm' => 'application/wasm',
